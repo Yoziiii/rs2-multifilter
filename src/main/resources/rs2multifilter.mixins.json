@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.rs2multifilter.minecraft.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "refmap": "rs2multifilter.refmap.json",
+  "injectors": { "defaultRequire": 1 },
+  "client": ["GridSearchMixin", "RepositoryFilterAccessor"]
+}
