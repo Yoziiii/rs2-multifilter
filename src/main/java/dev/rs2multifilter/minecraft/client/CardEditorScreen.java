@@ -130,7 +130,7 @@ public final class CardEditorScreen extends Screen {
         if (java.util.Arrays.stream(currentRules.split("\\R")).noneMatch(s -> s.equals(newRule))) {
             working = CardEditor.replace(working, index, category.name(), category.iconItemId(), currentRules + "\n" + newRule);
         }
-        rules.setValue(RuleText.format(working.categories().get(index).rules()).replace('\\n', ';'));
+        rules.setValue(RuleText.format(working.categories().get(index).rules()).replace('\n', ';'));
         error = "已加入标签 " + tagId;
     }
 
