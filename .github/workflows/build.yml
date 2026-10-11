@@ -1,0 +1,28 @@
+name: NeoForge 1.21.1 Build
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14'
+      - name: Compile and test
+        run: gradle build --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: rs2multifilter-jar
+          path: build/libs/*.jar
+          if-no-files-found: error
