@@ -1,0 +1,40 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.147'
+}
+
+version = '0.5.0-dev'
+group = 'dev.rs2multifilter'
+base { archivesName = 'rs2multifilter' }
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = '21.1.181'
+    runs {
+        client { client() }
+        server { server() }
+    }
+    mods {
+        rs2multifilter { sourceSet sourceSets.main }
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'Refined Storage'
+        url = 'https://maven.creeperhost.net'
+        content { includeGroup('com.refinedmods.refinedstorage') }
+    }
+}
+
+dependencies {
+    implementation 'com.refinedmods.refinedstorage:refinedstorage-neoforge:2.0.9'
+}
+
+processResources {
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand version: project.version
+    }
+}
