@@ -32,6 +32,8 @@ public final class CopyCardRecipe extends CustomRecipe {
         return new int[]{a, b};
     }
 
+    @Override public boolean canCraftInDimensions(int width, int height) { return width * height >= 2; }
+
     @Override public boolean matches(CraftingInput input, Level level) {
         return validInputs(input) != null;
     }
