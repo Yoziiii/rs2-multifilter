@@ -31,10 +31,16 @@ repositories {
 
 dependencies {
     implementation 'com.refinedmods.refinedstorage:refinedstorage-neoforge:2.0.9'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 processResources {
     filesMatching('META-INF/neoforge.mods.toml') {
         expand version: project.version
     }
+}
+
+test {
+    useJUnitPlatform()
 }
