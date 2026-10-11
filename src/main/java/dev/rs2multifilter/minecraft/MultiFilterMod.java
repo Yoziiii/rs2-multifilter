@@ -21,13 +21,13 @@ public final class MultiFilterMod {
     public static final DeferredRegister.DataComponents COMPONENTS = DeferredRegister.createDataComponents(Registries.DATA_COMPONENT_TYPE, ID);
     public static final DeferredRegister<RecipeSerializer<?>> RECIPES = DeferredRegister.create(Registries.RECIPE_SERIALIZER, ID);
 
-    public static final var CARD_DATA = COMPONENTS.registerComponentType("filter_card_config", b ->
+    public static final java.util.function.Supplier<net.minecraft.core.component.DataComponentType<String>> CARD_DATA = COMPONENTS.registerComponentType("filter_card_config", b ->
         b.persistent(Codec.STRING).networkSynchronized(ByteBufCodecs.STRING_UTF8)
     );
     public static final DeferredItem<FilterCardItem> FILTER_CARD = ITEMS.registerItem(
         "filter_card", FilterCardItem::new, new Item.Properties().stacksTo(1)
     );
-    public static final var COPY_RECIPE = RECIPES.register("copy_filter_card", () ->
+    public static final java.util.function.Supplier<RecipeSerializer<?>> COPY_RECIPE = RECIPES.register("copy_filter_card", () ->
         new SimpleCraftingRecipeSerializer<>(CopyCardRecipe::new)
     );
 
