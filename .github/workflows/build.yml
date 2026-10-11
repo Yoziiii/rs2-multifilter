@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: rs2-multifilter-build
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
