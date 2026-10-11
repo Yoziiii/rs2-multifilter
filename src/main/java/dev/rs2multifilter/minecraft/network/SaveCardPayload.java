@@ -1,0 +1,34 @@
+package dev.rs2multifilter.minecraft.network;
+
+import dev.rs2multifilter.core.CardWireCodec;
+import dev.rs2multifilter.minecraft.CardComponents;
+import dev.rs2multifilter.minecraft.MultiFilterMod;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
+
+public record SaveCardPayload(String data) implements CustomPacketPayload {
+    public static final Type<SaveCardPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(MultiFilterMod.ID, "save_card"));
+    public static final StreamCodec<ByteBuf, SaveCardPayload> STREAM_CODEC = StreamCodec.composite(
+        ByteBufCodecs.STRING_UTF8, SaveCardPayload::data, SaveCardPayload::new
+    );
+    @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+
+    public static void handle(SaveCardPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer player)) return;
+            if (payload.data().length() > CardWireCodec.MAX_ENCODED_CHARS) return;
+            var hand = player.getMainHandItem();
+            if (!hand.is(MultiFilterMod.FILTER_CARD.get())) return;
+            try {
+                var card = CardWireCodec.decode(payload.data());
+                CardComponents.write(hand, card);
+                player.getInventory().setChanged();
+            } catch (IllegalArgumentException ignored) { }
+        });
+    }
+}
