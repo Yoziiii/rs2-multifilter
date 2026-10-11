@@ -24,6 +24,45 @@ jobs:
           gradle-version: '8.14'
       - name: Compile and test
         run: gradle build --stacktrace
+      - name: Verify packaged NeoForge mod
+        run: |
+          JAR=$(find build/libs -maxdepth 1 -type f -name 'rs2multifilter-*.jar' | head -n 1)
+          test -n "$JAR"
+          jar tf "$JAR" | grep -q '^META-INF/neoforge.mods.toml
+        if: success()
+        with:
+          name: rs2multifilter-jar
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+          jar tf "$JAR" | grep -q '^rs2multifilter.mixins.json
+        if: success()
+        with:
+          name: rs2multifilter-jar
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+          jar tf "$JAR" | grep -q '^dev/rs2multifilter/minecraft/MultiFilterMod.class
+        if: success()
+        with:
+          name: rs2multifilter-jar
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+          jar tf "$JAR" | grep -q '^dev/rs2multifilter/minecraft/client/GridFilterSession.class
+        if: success()
+        with:
+          name: rs2multifilter-jar
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+          jar tf "$JAR" | grep -q '^data/rs2multifilter/recipe/copy_filter_card.json
+        if: success()
+        with:
+          name: rs2multifilter-jar
+          path: build/libs/*.jar
+          if-no-files-found: error
+
       - uses: actions/upload-artifact@v4
         if: success()
         with:
