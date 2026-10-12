@@ -80,6 +80,7 @@ public final class GridFilterSession {
     private ResourceRepositoryFilter<GridResource> wrap(ResourceRepositoryFilter<GridResource> nativeFilter) {
         if (selected < 0) return nativeFilter;
         FilterCategory category = card.categories().get(selected);
+        if (category.rules().isEmpty()) return (repo, resource) -> false;
         return (repo, resource) -> nativeFilter.test(repo, resource) && matches(category, resource);
     }
 
