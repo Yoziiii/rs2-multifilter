@@ -47,6 +47,16 @@ public final class AttributePickerScreen extends Screen {
             options.add(new Option("物品属性: 已损坏", FilterRule.Kind.DAMAGED, "true"));
         if (sample.isEnchanted())
             options.add(new Option("物品属性: 已附魔", FilterRule.Kind.ENCHANTED, "true"));
+        var containedFluid = FluidSampleSupport.findFluid(sample);
+        if (containedFluid != null) {
+            ResourceLocation fluidId = BuiltInRegistries.FLUID.getKey(containedFluid);
+            options.add(new Option("流体: " + fluidId, FilterRule.Kind.FLUID, fluidId.toString()));
+            containedFluid.defaultFluidState().getTags()
+                .map(tag -> new Option("流体标签: " + tag.location(),
+                    FilterRule.Kind.FLUID_TAG, tag.location().toString()))
+                .sorted(java.util.Comparator.comparing(Option::label))
+                .forEach(options::add);
+        }
         for (var attribute : CreateAttributeBridge.getSampleAttributes(sample)) {
             options.add(new Option(attribute.label(), FilterRule.Kind.CREATE_ATTRIBUTE, attribute.value()));
         }
