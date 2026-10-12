@@ -6,7 +6,7 @@ public final class CardEditor {
     private CardEditor() {}
 
     public static FilterCard add(FilterCard card, String name, String icon, String rulesText) {
-        return card.withCategory(new FilterCategory(name, icon, RuleText.parse(rulesText)));
+        return card.withCategory(new FilterCategory(name, icon, RuleText.parse(rulesText), categories.get(index).mode()));
     }
     public static FilterCard replace(FilterCard card, int index, String name, String icon, String rulesText) {
         List<FilterCategory> categories = new ArrayList<>(card.categories());

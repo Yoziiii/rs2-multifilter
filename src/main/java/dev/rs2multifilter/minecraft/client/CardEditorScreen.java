@@ -73,7 +73,7 @@ public final class CardEditorScreen extends Screen {
             .tooltip(Tooltip.create(Component.literal("包括该模组的所有物品，可在同一分类中连续加入多个模组"))).build());
         addRenderableWidget(Button.builder(Component.literal("仅添加此物品"), b -> addFromSample(FilterRule.Kind.ITEM))
             .bounds(x + 198, y + 111, 201, 19).build());
-        addRenderableWidget(Button.builder(Component.literal("选择物品标签…"), b -> pickTag())
+        addRenderableWidget(Button.builder(Component.literal("选择属性 / 物品标签…"), b -> pickAttributes())
             .bounds(x + 198, y + 134, 201, 19).build());
         addRenderableWidget(Button.builder(Component.literal("用样本做分类图标"), b -> setIconFromSample())
             .bounds(x + 198, y + 157, 201, 19).build());
@@ -215,6 +215,15 @@ public final class CardEditorScreen extends Screen {
         FilterCategory old = working.categories().get(selectedCategory);
         replaceCategory(new FilterCategory(old.name(), itemId(sample).toString(), old.rules(), old.mode()));
         notice("分类图标已改为 " + sample.getHoverName().getString(), false);
+    }
+
+    private void pickAttributes() {
+        if (selectedCategory < 0 || sample.isEmpty()) {
+            notice("先选择分类和样本物品", true); return;
+        }
+        if (!storeName()) return;
+        Minecraft.getInstance().setScreen(new AttributePickerScreen(
+            this, sample, rule -> addRule(rule)));
     }
 
     private void pickTag() {
