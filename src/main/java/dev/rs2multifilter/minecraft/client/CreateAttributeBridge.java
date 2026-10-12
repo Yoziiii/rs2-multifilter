@@ -60,6 +60,31 @@ public final class CreateAttributeBridge {
         return List.copyOf(result);
     }
 
+    /** Human-readable translation of a persisted Create item attribute. */
+    public static String describe(String encoded) {
+        try {
+            Object attribute = CACHE.get(encoded);
+            if (attribute == null) {
+                Level level = Minecraft.getInstance().level;
+                if (level == null || !encoded.startsWith("create:")) return "Create 属性";
+                Class<?> type = Class.forName(ATTRIBUTE_CLASS);
+                Method load = type.getMethod("loadStatic", CompoundTag.class,
+                    net.minecraft.core.HolderLookup.Provider.class);
+                String nbt = new String(HEX.parseHex(encoded.substring(7)),
+                    StandardCharsets.UTF_8);
+                if (nbt.length() > 2048) return "Create 属性";
+                attribute = load.invoke(null, TagParser.parseTag(nbt), level.registryAccess());
+                if (attribute == null) return "Create 属性";
+                CACHE.put(encoded, attribute);
+            }
+            Object component = attribute.getClass().getMethod("format", boolean.class)
+                .invoke(attribute, false);
+            return component instanceof Component text ? text.getString() : "Create 属性";
+        } catch (Exception | LinkageError ignored) {
+            return "Create 属性";
+        }
+    }
+
     public static boolean matches(String encoded, ItemStack stack) {
         Level level = Minecraft.getInstance().level;
         if (level == null || stack.isEmpty() || !encoded.startsWith("create:")) return false;

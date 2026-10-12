@@ -102,11 +102,24 @@ public final class CardEditorScreen extends Screen {
                 int idx = rulesPage * RULES_PAGE_SIZE + i;
                 if (idx >= rules.size()) break;
                 FilterRule rule = rules.get(idx);
-                String text = (rule.exclude() ? "排除 " : "包含 ") + rule.kind().name().toLowerCase() + " " + rule.value();
+                String readable = switch (rule.kind()) {
+                    case MOD -> "模组 " + ModList.get().getModContainerById(rule.value())
+                        .map(mod -> mod.getModInfo().getDisplayName()).orElse(rule.value());
+                    case ITEM -> "物品 " + rule.value();
+                    case TAG -> "标签 " + rule.value();
+                    case FLUID -> "流体 " + rule.value();
+                    case FLUID_TAG -> "流体标签 " + rule.value();
+                    case CREATE_ATTRIBUTE -> CreateAttributeBridge.describe(rule.value());
+                    case FOOD -> "可以食用";
+                    case DAMAGED -> "已损坏";
+                    case DAMAGEABLE -> "可损坏";
+                    case ENCHANTED -> "已附魔";
+                };
+                String text = (rule.exclude() ? "排除 " : "包含 ") + readable;
                 if (text.length() > 29) text = text.substring(0, 28) + "…";
                 addRenderableWidget(Button.builder(Component.literal(text + "  ×"), b -> removeRule(idx))
                     .bounds(x + 198, y + 185 + i * 17, 201, 16)
-                    .tooltip(Tooltip.create(Component.literal("点击移除规则： " + rule.value()))).build());
+                    .tooltip(Tooltip.create(Component.literal("点击移除：" + readable))).build());
             }
         } else {
             nameField.setValue("");
