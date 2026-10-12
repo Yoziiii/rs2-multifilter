@@ -19,6 +19,20 @@ import net.neoforged.neoforge.network.PacketDistributor;
 public final class InstalledCardEvents {
     private InstalledCardEvents() {}
 
+    /** Broadcast a card change to ALL viewers of the same physical RS grid. */
+    public static void broadcastCardUpdate(Object grid, int slot) {
+        if (!(grid instanceof com.refinedmods.refinedstorage.common.grid.AbstractGridBlockEntity block)) return;
+        if (!(block.getLevel() instanceof net.minecraft.server.level.ServerLevel world)) return;
+        ItemStack card = ((InstalledCardHolder)block).rs2mf$getInstalledCard(slot);
+        String encoded = SwapInstalledCardPayload.cardData(card);
+        for (ServerPlayer viewer : world.getServer().getPlayerList().getPlayers()) {
+            if (!(viewer.containerMenu instanceof AbstractGridContainerMenu menu)) continue;
+            if (((GridMenuAccessor)menu).rs2mf$getGrid() != grid) continue;
+            PacketDistributor.sendToPlayer(viewer,
+                new InstalledCardDataPayload(menu.containerId, slot, encoded));
+        }
+    }
+
     @SubscribeEvent
     public static void onMenuOpen(PlayerContainerEvent.Open event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;

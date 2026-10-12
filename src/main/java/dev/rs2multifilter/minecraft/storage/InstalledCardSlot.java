@@ -37,7 +37,10 @@ public final class InstalledCardSlot extends Slot {
     @Override public void set(ItemStack stack) {
         if (!stack.isEmpty() && (!stack.is(MultiFilterMod.FILTER_CARD.get()) || stack.getCount() != 1)) return;
         InstalledCardHolder holder = owner();
-        if (holder != null) holder.rs2mf$setInstalledCard(filterIndex, stack);
+        if (holder != null) {
+            holder.rs2mf$setInstalledCard(filterIndex, stack);
+            InstalledCardEvents.broadcastCardUpdate(gridSupplier.get(), filterIndex);
+        }
         super.set(stack);
     }
 
