@@ -6,11 +6,11 @@ public final class CardEditor {
     private CardEditor() {}
 
     public static FilterCard add(FilterCard card, String name, String icon, String rulesText) {
-        return card.withCategory(new FilterCategory(name, icon, RuleText.parse(rulesText), categories.get(index).mode()));
+        return card.withCategory(new FilterCategory(name, icon, RuleText.parse(rulesText)));
     }
     public static FilterCard replace(FilterCard card, int index, String name, String icon, String rulesText) {
         List<FilterCategory> categories = new ArrayList<>(card.categories());
-        categories.set(index, new FilterCategory(name, icon, RuleText.parse(rulesText)));
+        categories.set(index, new FilterCategory(name, icon, RuleText.parse(rulesText), categories.get(index).mode()));
         return new FilterCard(FilterCard.VERSION, categories);
     }
     public static FilterCard remove(FilterCard card, int index) {
