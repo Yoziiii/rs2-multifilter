@@ -32,6 +32,29 @@ class FilterCardTest {
         assertNull(CardCopyRules.copyConfiguration(FilterCard.blank(), FilterCard.blank()));
     }
 
+
+    @Test void createStyleModesAndExcludedRules() {
+        var viewCreate = item("create:cogwheel", "c:gears");
+        var viewCataclysm = item("cataclysm:weapon");
+        var viewOther = item("minecraft:dirt");
+        var rules = RuleText.parse("+mod:create\\n+mod:cataclysm");
+        var any = new FilterCategory("any", "minecraft:paper", rules, FilterCategory.Mode.ANY);
+        var all = new FilterCategory("all", "minecraft:paper", rules, FilterCategory.Mode.ALL);
+        var deny = new FilterCategory("deny", "minecraft:paper", rules, FilterCategory.Mode.DENY);
+        assertTrue(any.matches(viewCreate));
+        assertTrue(any.matches(viewCataclysm));
+        assertFalse(any.matches(viewOther));
+        assertFalse(all.matches(viewCreate));
+        assertFalse(all.matches(viewCataclysm));
+        assertTrue(deny.matches(viewOther));
+        assertFalse(deny.matches(viewCataclysm));
+        var card = FilterCard.blank().withCategory(deny);
+        assertEquals(card, CardWireCodec.decode(CardWireCodec.encode(card)));
+        var veto = new FilterCategory("veto", "minecraft:paper",
+            RuleText.parse("+mod:create\\n-item:create:cogwheel"));
+        assertFalse(veto.matches(viewCreate));
+    }
+
     @Test void rejectsCorruptData() {
         assertThrows(IllegalArgumentException.class, () -> CardWireCodec.decode("v1:garbage"));
         assertThrows(IllegalArgumentException.class, () -> CardWireCodec.decode("nonsense"));
