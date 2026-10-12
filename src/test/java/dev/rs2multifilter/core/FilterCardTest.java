@@ -55,6 +55,31 @@ class FilterCardTest {
         assertFalse(veto.matches(viewCreate));
     }
 
+
+    @Test void supportsExactCreateAndFluidSerializedConditions() {
+        var modeRules = List.of(
+            new FilterRule(FilterRule.Kind.FLUID, "minecraft:water", false),
+            new FilterRule(FilterRule.Kind.FLUID_TAG, "c:water", false),
+            new FilterRule(FilterRule.Kind.EXACT_ITEM, "exact:abcd", false),
+            new FilterRule(FilterRule.Kind.CREATE_ATTRIBUTE, "create:abcd", false));
+        var card = FilterCard.blank().withCategory(
+            new FilterCategory("属性与流体", "minecraft:bucket", modeRules, FilterCategory.Mode.ANY));
+        assertEquals(card, CardWireCodec.decode(CardWireCodec.encode(card)));
+        assertThrows(IllegalArgumentException.class,
+            () -> new FilterRule(FilterRule.Kind.EXACT_ITEM, "exact:abc", false));
+    }
+
+    @Test void physicalCardCategoryLimitIs64() {
+        FilterCard card = FilterCard.blank();
+        for (int i = 0; i < 64; i++)
+            card = card.withCategory(new FilterCategory("分类" + i,
+                "minecraft:paper", List.of()));
+        assertEquals(64, card.categories().size());
+        FilterCard filled = card;
+        assertThrows(IllegalArgumentException.class, () ->
+            filled.withCategory(new FilterCategory("extra", "minecraft:paper", List.of())));
+    }
+
     @Test void rejectsCorruptData() {
         assertThrows(IllegalArgumentException.class, () -> CardWireCodec.decode("v1:garbage"));
         assertThrows(IllegalArgumentException.class, () -> CardWireCodec.decode("nonsense"));
