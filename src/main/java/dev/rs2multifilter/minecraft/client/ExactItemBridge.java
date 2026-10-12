@@ -22,7 +22,8 @@ public final class ExactItemBridge {
     public static String encode(ItemStack input) {
         if (input.isEmpty() || Minecraft.getInstance().level == null) return null;
         try {
-            CompoundTag nbt = input.copyWithCount(1).save(Minecraft.getInstance().level.registryAccess());
+            net.minecraft.nbt.Tag tag = input.copyWithCount(1).save(Minecraft.getInstance().level.registryAccess());
+            if (!(tag instanceof CompoundTag nbt)) return null;
             String value = "exact:" + HEX.formatHex(nbt.toString().getBytes(StandardCharsets.UTF_8));
             if (value.length() > 4096) return null;
             CACHE.put(value, input.copyWithCount(1));
