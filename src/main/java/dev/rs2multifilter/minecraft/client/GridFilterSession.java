@@ -7,6 +7,8 @@ import com.refinedmods.refinedstorage.api.resource.repository.ResourceRepository
 import com.refinedmods.refinedstorage.common.api.grid.view.GridResource;
 import com.refinedmods.refinedstorage.common.grid.AbstractGridContainerMenu;
 import com.refinedmods.refinedstorage.common.grid.view.ItemGridResource;
+import com.refinedmods.refinedstorage.common.grid.view.FluidGridResource;
+import com.refinedmods.refinedstorage.common.support.resource.FluidResource;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
@@ -85,9 +87,17 @@ public final class GridFilterSession {
     }
 
     private static boolean matches(FilterCategory category, GridResource resource) {
-        if (!(resource instanceof ItemGridResource itemGrid)) return false;
-        ItemStack stack = itemGrid.getItemStack();
-        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        boolean isItem = resource instanceof ItemGridResource;
+        boolean isFluid = resource instanceof FluidGridResource;
+        if (!isItem && !isFluid) return false;
+
+        ItemStack stack = isItem ? ((ItemGridResource)resource).getItemStack() : ItemStack.EMPTY;
+        net.minecraft.world.level.material.Fluid fluid = isFluid
+            ? ((FluidResource)resource.getResourceForRecipeMods()).fluid() : null;
+        ResourceLocation id = isItem
+            ? BuiltInRegistries.ITEM.getKey(stack.getItem())
+            : BuiltInRegistries.FLUID.getKey(fluid);
+
         if (category.rules().isEmpty()) return false;
         boolean includes = false;
         boolean any = false;
@@ -95,12 +105,17 @@ public final class GridFilterSession {
         for (FilterRule rule : category.rules()) {
             boolean matched = switch (rule.kind()) {
                 case MOD -> id.getNamespace().equals(rule.value());
-                case ITEM -> id.toString().equals(rule.value());
-                case TAG -> stack.is(TagKey.create(Registries.ITEM, ResourceLocation.parse(rule.value())));
-                case FOOD -> stack.has(net.minecraft.core.component.DataComponents.FOOD);
-                case DAMAGED -> stack.isDamaged();
-                case ENCHANTED -> stack.isEnchanted();
-                case CREATE_ATTRIBUTE -> CreateAttributeBridge.matches(rule.value(), stack);
+                case ITEM -> isItem && id.toString().equals(rule.value());
+                case TAG -> isItem && stack.is(TagKey.create(Registries.ITEM,
+                    ResourceLocation.parse(rule.value())));
+                case FLUID -> isFluid && id.toString().equals(rule.value());
+                case FLUID_TAG -> isFluid && fluid.defaultFluidState().is(TagKey.create(Registries.FLUID,
+                    ResourceLocation.parse(rule.value())));
+                case FOOD -> isItem && stack.has(net.minecraft.core.component.DataComponents.FOOD);
+                case DAMAGED -> isItem && stack.isDamaged();
+                case DAMAGEABLE -> isItem && stack.isDamageableItem();
+                case ENCHANTED -> isItem && stack.isEnchanted();
+                case CREATE_ATTRIBUTE -> isItem && CreateAttributeBridge.matches(rule.value(), stack);
             };
             if (rule.exclude()) {
                 if (matched) return false;

@@ -42,7 +42,9 @@ public final class AttributePickerScreen extends Screen {
         if (sample.has(DataComponents.FOOD))
             options.add(new Option("物品属性: 可以食用", FilterRule.Kind.FOOD, "true"));
         if (sample.isDamageableItem())
-            options.add(new Option("物品属性: 可损坏", FilterRule.Kind.DAMAGED, "true"));
+            options.add(new Option("物品属性: 可损坏", FilterRule.Kind.DAMAGEABLE, "true"));
+        if (sample.isDamaged())
+            options.add(new Option("物品属性: 已损坏", FilterRule.Kind.DAMAGED, "true"));
         if (sample.isEnchanted())
             options.add(new Option("物品属性: 已附魔", FilterRule.Kind.ENCHANTED, "true"));
         for (var attribute : CreateAttributeBridge.getSampleAttributes(sample)) {

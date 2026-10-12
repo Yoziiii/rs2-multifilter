@@ -5,7 +5,7 @@ import java.util.Objects;
 import java.util.Set;
 
 public record FilterRule(Kind kind, String value, boolean exclude) {
-    public enum Kind { MOD, ITEM, TAG, FOOD, DAMAGED, ENCHANTED, CREATE_ATTRIBUTE }
+    public enum Kind { MOD, ITEM, TAG, FOOD, DAMAGED, ENCHANTED, CREATE_ATTRIBUTE, FLUID, FLUID_TAG, DAMAGEABLE }
 
     public FilterRule {
         Objects.requireNonNull(kind);
@@ -15,7 +15,7 @@ public record FilterRule(Kind kind, String value, boolean exclude) {
         if (!createEncoded && (value.isEmpty() || value.length() > 256 || !value.matches("[a-z0-9_.-]+(:[a-z0-9_./-]+)?"))) {
             throw new IllegalArgumentException("Invalid registry ID: " + value);
         }
-        if ((kind == Kind.ITEM || kind == Kind.TAG) && !value.contains(":")) {
+        if ((kind == Kind.ITEM || kind == Kind.TAG || kind == Kind.FLUID || kind == Kind.FLUID_TAG) && !value.contains(":")) {
             throw new IllegalArgumentException("Item/tag requires namespace:path");
         }
         if (kind == Kind.MOD && value.contains(":")) {
@@ -31,7 +31,8 @@ public record FilterRule(Kind kind, String value, boolean exclude) {
             case FOOD -> item.food();
             case DAMAGED -> item.damaged();
             case ENCHANTED -> item.enchanted();
-            case CREATE_ATTRIBUTE -> false; // Requires client-side Create game context
+            case CREATE_ATTRIBUTE, FLUID, FLUID_TAG -> false; // Requires resource-specific game context
+            case DAMAGEABLE -> item.damaged();
         };
     }
 
