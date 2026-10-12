@@ -20,7 +20,7 @@ import com.refinedmods.refinedstorage.api.resource.repository.ResourceRepository
 public final class GridFilterSession {
     private static final WeakHashMap<AbstractGridContainerMenu, GridFilterSession> SESSIONS = new WeakHashMap<>();
     private final WeakReference<AbstractGridContainerMenu> menuRef;
-    private final FilterCard card;
+    private FilterCard card;
     private ResourceRepositoryFilter<GridResource> searchFilter;
     private int selected = -1;
 
@@ -51,6 +51,22 @@ public final class GridFilterSession {
     }
 
     public int selected() { return selected; }
+    public FilterCard card() { return card; }
+
+    public void updateCard(FilterCard replacement) {
+        if (card.equals(replacement)) return;
+        card = replacement;
+        if (selected >= card.categories().size()) selected = -1;
+        reapply();
+    }
+
+    private void reapply() {
+        AbstractGridContainerMenu menu = menuRef.get();
+        if (menu == null) return;
+        if (searchFilter == null) searchFilter = (r, item) -> true;
+        menu.getRepository().setFilterAndSort(wrap(searchFilter));
+    }
+
 
     public void select(int index) {
         if (index >= card.categories().size() || index < -1) throw new IndexOutOfBoundsException(index);
