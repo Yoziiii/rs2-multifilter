@@ -10,7 +10,7 @@ base { archivesName = 'rs2multifilter' }
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 neoForge {
-    version = '21.1.181'
+    version = '21.1.248'
     runs {
         client { client() }
         server { server() }
