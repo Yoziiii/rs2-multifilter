@@ -9,6 +9,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
@@ -30,7 +31,7 @@ public final class InstalledCardEvents {
             SwapInstalledCardPayload.cardData(card)));
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onBreak(BlockEvent.BreakEvent event) {
         if (event.getLevel().isClientSide()) return;
         if (!(event.getLevel() instanceof net.minecraft.server.level.ServerLevel world)) return;
