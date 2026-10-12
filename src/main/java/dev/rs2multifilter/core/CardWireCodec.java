@@ -54,7 +54,7 @@ public final class CardWireCodec {
                     String name = in.readUTF();
                     String icon = in.readUTF();
                     int rc = in.readUnsignedShort();
-                    if (rc == 0 || rc > 256) throw new IllegalArgumentException("规则数量无效");
+                    if (rc > 256) throw new IllegalArgumentException("规则数量无效");
                     List<FilterRule> rules = new ArrayList<>(rc);
                     for (int j = 0; j < rc; j++) {
                         int kind = in.readUnsignedByte();
