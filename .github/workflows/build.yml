@@ -33,6 +33,21 @@ jobs:
           jar tf "$JAR" | grep -Fq 'dev/rs2multifilter/minecraft/MultiFilterMod.class'
           jar tf "$JAR" | grep -Fq 'dev/rs2multifilter/minecraft/client/GridFilterSession.class'
           jar tf "$JAR" | grep -Fq 'data/rs2multifilter/recipe/copy_filter_card.json'
+      - name: Headless NeoForge server smoke test
+        run: |
+          mkdir -p run
+          echo 'eula=true' > run/eula.txt
+          set +e
+          timeout 150s gradle runServer --console=plain > server-smoke.log 2>&1
+          RESULT=$?
+          set -e
+          tail -n 120 server-smoke.log
+          if grep -Eiq 'Done \(|For help, type|Preparing spawn area' server-smoke.log; then
+            echo "NeoForge reached Minecraft server initialization."
+            exit 0
+          fi
+          echo "Server did not reach expected startup markers (exit=$RESULT)."
+          exit 1
       - uses: actions/upload-artifact@v4
         with:
           name: rs2multifilter-jar
