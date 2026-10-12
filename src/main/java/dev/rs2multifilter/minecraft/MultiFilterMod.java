@@ -1,6 +1,8 @@
 package dev.rs2multifilter.minecraft;
 
 import dev.rs2multifilter.minecraft.network.SaveCardPayload;
+import dev.rs2multifilter.minecraft.network.SwapInstalledCardPayload;
+import dev.rs2multifilter.minecraft.network.InstalledCardDataPayload;
 import dev.rs2multifilter.minecraft.recipe.CopyCardRecipe;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -39,6 +41,9 @@ public final class MultiFilterMod {
     }
 
     private void onPayloadRegistration(RegisterPayloadHandlersEvent event) {
-        event.registrar("1").playToServer(SaveCardPayload.TYPE, SaveCardPayload.STREAM_CODEC, SaveCardPayload::handle);
+        var registrar = event.registrar("1");
+        registrar.playToServer(SaveCardPayload.TYPE, SaveCardPayload.STREAM_CODEC, SaveCardPayload::handle);
+        registrar.playToServer(SwapInstalledCardPayload.TYPE, SwapInstalledCardPayload.STREAM_CODEC, SwapInstalledCardPayload::handle);
+        registrar.playToClient(InstalledCardDataPayload.TYPE, InstalledCardDataPayload.STREAM_CODEC, InstalledCardDataPayload::handle);
     }
 }
