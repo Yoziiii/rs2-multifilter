@@ -13,7 +13,9 @@ public record FilterRule(Kind kind, String value, boolean exclude) {
         value = value.trim().toLowerCase(Locale.ROOT);
         boolean createEncoded = (kind == Kind.CREATE_ATTRIBUTE && value.matches("create:[0-9a-f]{2,4096}") && (value.length() - 7) % 2 == 0)
             || (kind == Kind.EXACT_ITEM && value.matches("exact:[0-9a-f]{2,4096}") && (value.length() - 6) % 2 == 0);
-        if (!createEncoded && (value.isEmpty() || value.length() > 256 || !value.matches("[a-z0-9_.-]+(:[a-z0-9_./-]+)?"))) {
+        if (kind == Kind.CREATE_ATTRIBUTE || kind == Kind.EXACT_ITEM) {
+            if (!createEncoded) throw new IllegalArgumentException("Invalid encoded attribute");
+        } else if (value.isEmpty() || value.length() > 256 || !value.matches("[a-z0-9_.-]+(:[a-z0-9_./-]+)?")) {
             throw new IllegalArgumentException("Invalid registry ID: " + value);
         }
         if ((kind == Kind.ITEM || kind == Kind.TAG || kind == Kind.FLUID || kind == Kind.FLUID_TAG) && !value.contains(":")) {
