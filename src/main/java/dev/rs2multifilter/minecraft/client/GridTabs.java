@@ -134,6 +134,7 @@ public final class GridTabs {
         if (state == null) return;
 
         int menuId = screen.getMenu().containerId;
+        state.session.keepNativeControlsWorking();
         FilterCard latest = ClientCardState.card(menuId);
         if (!latest.equals(state.card)) {
             state.card = latest;

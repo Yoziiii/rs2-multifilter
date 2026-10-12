@@ -24,6 +24,7 @@ public final class GridFilterSession {
     private final WeakReference<AbstractGridContainerMenu> menuRef;
     private FilterCard card;
     private ResourceRepositoryFilter<GridResource> searchFilter;
+    private ResourceRepositoryFilter<GridResource> lastWrapped;
     private int selected = -1;
 
     private GridFilterSession(AbstractGridContainerMenu menu, FilterCard card) {
@@ -50,6 +51,25 @@ public final class GridFilterSession {
     }
     public static void detach(AbstractGridContainerMenu menu) {
         SESSIONS.remove(menu);
+    }
+
+    /**
+     * RS can replace the repository filter when its native controls change.
+     * Reapply our category layer only when that actually happens, preserving
+     * the latest native search/view/sorting predicate.
+     */
+    public void keepNativeControlsWorking() {
+        if (selected < 0) return;
+        AbstractGridContainerMenu menu = menuRef.get();
+        if (menu == null || !(menu.getRepository() instanceof ResourceRepositoryImpl<?> repository)) return;
+        @SuppressWarnings("unchecked")
+        ResourceRepositoryFilter<GridResource> active =
+            (ResourceRepositoryFilter<GridResource>)
+                ((RepositoryFilterAccessor)repository).rs2multifilter$getFilter();
+        if (active != null && active != lastWrapped) {
+            searchFilter = active;
+            reapply();
+        }
     }
 
     public int selected() { return selected; }
@@ -80,10 +100,15 @@ public final class GridFilterSession {
     }
 
     private ResourceRepositoryFilter<GridResource> wrap(ResourceRepositoryFilter<GridResource> nativeFilter) {
-        if (selected < 0) return nativeFilter;
+        if (selected < 0) {
+            lastWrapped = nativeFilter;
+            return nativeFilter;
+        }
         FilterCategory category = card.categories().get(selected);
-        if (category.rules().isEmpty()) return (repo, resource) -> false;
-        return (repo, resource) -> nativeFilter.test(repo, resource) && matches(category, resource);
+        lastWrapped = category.rules().isEmpty()
+            ? (repo, resource) -> false
+            : (repo, resource) -> nativeFilter.test(repo, resource) && matches(category, resource);
+        return lastWrapped;
     }
 
     private static boolean matches(FilterCategory category, GridResource resource) {
