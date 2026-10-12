@@ -100,6 +100,7 @@ public final class GridFilterSession {
                 case FOOD -> stack.has(net.minecraft.core.component.DataComponents.FOOD);
                 case DAMAGED -> stack.isDamaged();
                 case ENCHANTED -> stack.isEnchanted();
+                case CREATE_ATTRIBUTE -> CreateAttributeBridge.matches(rule.value(), stack);
             };
             if (rule.exclude()) {
                 if (matched) return false;

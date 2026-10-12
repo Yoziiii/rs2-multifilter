@@ -5,13 +5,14 @@ import java.util.Objects;
 import java.util.Set;
 
 public record FilterRule(Kind kind, String value, boolean exclude) {
-    public enum Kind { MOD, ITEM, TAG, FOOD, DAMAGED, ENCHANTED }
+    public enum Kind { MOD, ITEM, TAG, FOOD, DAMAGED, ENCHANTED, CREATE_ATTRIBUTE }
 
     public FilterRule {
         Objects.requireNonNull(kind);
         Objects.requireNonNull(value);
         value = value.trim().toLowerCase(Locale.ROOT);
-        if (value.isEmpty() || value.length() > 256 || !value.matches("[a-z0-9_.-]+(:[a-z0-9_./-]+)?")) {
+        boolean createEncoded = kind == Kind.CREATE_ATTRIBUTE && value.matches("create:[0-9a-f]{2,4096}") && (value.length() % 2 == 1);
+        if (!createEncoded && (value.isEmpty() || value.length() > 256 || !value.matches("[a-z0-9_.-]+(:[a-z0-9_./-]+)?"))) {
             throw new IllegalArgumentException("Invalid registry ID: " + value);
         }
         if ((kind == Kind.ITEM || kind == Kind.TAG) && !value.contains(":")) {
@@ -30,6 +31,7 @@ public record FilterRule(Kind kind, String value, boolean exclude) {
             case FOOD -> item.food();
             case DAMAGED -> item.damaged();
             case ENCHANTED -> item.enchanted();
+            case CREATE_ATTRIBUTE -> false; // Requires client-side Create game context
         };
     }
 

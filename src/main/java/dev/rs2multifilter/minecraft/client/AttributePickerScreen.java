@@ -45,6 +45,9 @@ public final class AttributePickerScreen extends Screen {
             options.add(new Option("物品属性: 可损坏", FilterRule.Kind.DAMAGED, "true"));
         if (sample.isEnchanted())
             options.add(new Option("物品属性: 已附魔", FilterRule.Kind.ENCHANTED, "true"));
+        for (var attribute : CreateAttributeBridge.getSampleAttributes(sample)) {
+            options.add(new Option(attribute.label(), FilterRule.Kind.CREATE_ATTRIBUTE, attribute.value()));
+        }
     }
 
     @Override protected void init() {
