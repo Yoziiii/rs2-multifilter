@@ -9,7 +9,8 @@
   },
   "client": [
     "GridSearchMixin",
-    "RepositoryFilterAccessor"
+    "RepositoryFilterAccessor",
+    "GridSlotOutsideClickMixin"
   ],
   "mixins": [
     "GridCardStorageMixin",
