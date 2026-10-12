@@ -36,14 +36,14 @@ public final class GridTabs {
     private static final class TabState {
         FilterCard card;
         final GridFilterSession session;
-        final Button slotButton;
+        final List<Button> slotButtons;
         final List<IconButton> icons;
         final Runnable refresh;
-        TabState(FilterCard card, GridFilterSession session, Button slotButton,
+        TabState(FilterCard card, GridFilterSession session, List<Button> slotButtons,
                  List<IconButton> icons, Runnable refresh) {
             this.card = card;
             this.session = session;
-            this.slotButton = slotButton;
+            this.slotButtons = slotButtons;
             this.icons = icons;
             this.refresh = refresh;
         }
@@ -70,11 +70,18 @@ public final class GridTabs {
         final int[] page = {0};
         final Runnable[] refresh = {() -> {}};
 
-        Button slot = Button.builder(Component.literal("+"), b ->
-            PacketDistributor.sendToServer(new SwapInstalledCardPayload(menuId))
-        ).bounds(screen.getGuiLeft() - 15, y, 20, 20)
-         .tooltip(Tooltip.create(Component.literal("过滤卡槽：鼠标拿着过滤卡点击安装；空手点击取回"))).build();
-        event.addListener(slot);
+        // Classic RS used four vertical filter slots to the right of the grid.
+        // Match the original x=204 and y=6+18*slot GUI coordinates.
+        List<Button> slotButtons = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            final int cardSlot = i;
+            Button slot = Button.builder(Component.literal(""), b ->
+                PacketDistributor.sendToServer(new SwapInstalledCardPayload(menuId, cardSlot))
+            ).bounds(screen.getGuiLeft() + 204, screen.getGuiTop() + 6 + i * 18, 18, 18)
+             .tooltip(Tooltip.create(Component.literal("旧版过滤槽 " + (i + 1) + "：拿着卡点击插入，空手点击取回"))).build();
+            slotButtons.add(slot);
+            event.addListener(slot);
+        }
 
         Button all = Button.builder(Component.literal("全"), b -> {
             session.select(-1);
@@ -110,7 +117,9 @@ public final class GridTabs {
 
         refresh[0] = () -> {
             int total = current[0].categories().size();
-            slot.setMessage(Component.literal(ClientCardState.installed(menuId) ? " " : "+"));
+            for (int i = 0; i < slotButtons.size(); i++) {
+                slotButtons.get(i).setMessage(Component.literal(ClientCardState.installed(menuId, i) ? "" : "+"));
+            }
             all.setMessage(Component.literal(session.selected() < 0 ? "●" : "全"));
             for (int i = 0; i < PER_PAGE; i++) {
                 int idx = page[0] * PER_PAGE + i;
@@ -127,7 +136,7 @@ public final class GridTabs {
             next.active = (page[0] + 1) * PER_PAGE < total;
         };
         refresh[0].run();
-        STATES.put(screen, new TabState(initial, session, slot, icons, refresh[0]));
+        STATES.put(screen, new TabState(initial, session, slotButtons, icons, refresh[0]));
     }
 
     private static ItemStack iconFor(String id) {
@@ -149,11 +158,14 @@ public final class GridTabs {
             state.session.updateCard(latest);
             state.refresh.run();
         }
-        // Display the actual inserted card, keeping the button inside the RS toolbar.
-        state.slotButton.setMessage(Component.literal(ClientCardState.installed(menuId) ? " " : "+"));
-        if (ClientCardState.installed(menuId)) {
-            event.getGuiGraphics().renderItem(new ItemStack(MultiFilterMod.FILTER_CARD.get()),
-                state.slotButton.getX() + 2, state.slotButton.getY() + 2);
+        for (int i = 0; i < state.slotButtons.size(); i++) {
+            Button slot = state.slotButtons.get(i);
+            boolean occupied = ClientCardState.installed(menuId, i);
+            slot.setMessage(Component.literal(occupied ? "" : "+"));
+            if (occupied) {
+                event.getGuiGraphics().renderItem(new ItemStack(MultiFilterMod.FILTER_CARD.get()),
+                    slot.getX() + 1, slot.getY() + 1);
+            }
         }
         for (IconButton icon : state.icons) {
             if (icon.button().visible)
