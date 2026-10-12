@@ -47,6 +47,6 @@ public record SwapInstalledCardPayload(int menuId) implements CustomPacketPayloa
 
     public static String cardData(ItemStack installed) {
         if (installed.isEmpty()) return "";
-        return installed.getOrDefault(MultiFilterMod.CARD_DATA.get(), "");
+        return dev.rs2multifilter.core.CardWireCodec.encode(dev.rs2multifilter.minecraft.CardComponents.read(installed));
     }
 }
