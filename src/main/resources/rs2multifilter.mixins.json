@@ -13,6 +13,8 @@
   ],
   "mixins": [
     "GridCardStorageMixin",
-    "GridMenuAccessor"
+    "GridMenuAccessor",
+    "ResourceMenuSlotInvoker",
+    "GridNativeSlotsMixin"
   ]
 }
