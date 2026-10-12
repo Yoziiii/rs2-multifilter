@@ -110,6 +110,7 @@ public final class CardEditorScreen extends Screen {
                     case FLUID -> "流体 " + rule.value();
                     case FLUID_TAG -> "流体标签 " + rule.value();
                     case CREATE_ATTRIBUTE -> CreateAttributeBridge.describe(rule.value());
+                    case EXACT_ITEM -> ExactItemBridge.describe(rule.value());
                     case FOOD -> "可以食用";
                     case DAMAGED -> "已损坏";
                     case DAMAGEABLE -> "可损坏";

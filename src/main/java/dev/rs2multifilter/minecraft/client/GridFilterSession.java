@@ -116,6 +116,7 @@ public final class GridFilterSession {
                 case DAMAGEABLE -> isItem && stack.isDamageableItem();
                 case ENCHANTED -> isItem && stack.isEnchanted();
                 case CREATE_ATTRIBUTE -> isItem && CreateAttributeBridge.matches(rule.value(), stack);
+                case EXACT_ITEM -> isItem && ExactItemBridge.matches(rule.value(), stack);
             };
             if (rule.exclude()) {
                 if (matched) return false;

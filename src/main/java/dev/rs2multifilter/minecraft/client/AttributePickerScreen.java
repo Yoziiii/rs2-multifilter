@@ -57,6 +57,10 @@ public final class AttributePickerScreen extends Screen {
                 .sorted(java.util.Comparator.comparing(Option::label))
                 .forEach(options::add);
         }
+        String precise = ExactItemBridge.encode(sample);
+        if (precise != null) {
+            options.add(new Option("物品属性: 严格匹配附加数据", FilterRule.Kind.EXACT_ITEM, precise));
+        }
         for (var attribute : CreateAttributeBridge.getSampleAttributes(sample)) {
             options.add(new Option(attribute.label(), FilterRule.Kind.CREATE_ATTRIBUTE, attribute.value()));
         }
