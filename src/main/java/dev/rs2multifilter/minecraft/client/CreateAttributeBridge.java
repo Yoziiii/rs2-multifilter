@@ -81,7 +81,7 @@ public final class CreateAttributeBridge {
                 attr.getClass().getMethod("appliesTo", ItemStack.class, Level.class)
                     .invoke(attr, stack, level)
             );
-        } catch (ReflectiveOperationException | IllegalArgumentException | LinkageError e) {
+        } catch (Exception | LinkageError e) {
             return false;
         }
     }
