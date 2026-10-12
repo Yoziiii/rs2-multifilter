@@ -73,7 +73,7 @@ public final class CardEditorScreen extends Screen {
         addButton(x + 11, y + 213, 166, 20,
             fuzzy ? "物品匹配：模糊 ✓" : "物品匹配：精确 ✓",
             "模糊：忽略附魔、耐久和组件数据；精确：这些数据必须完全相同",
-            () -> { fuzzy = !fuzzy; refreshOptions(); rebuildWidgets(); });
+            this::toggleFuzzy);
         addButton(x + 11, y + 237, 166, 19, "清空参考物品",
             "仅清除参考物品，不删除已添加的规则",
             () -> { sample = ItemStack.EMPTY; refreshOptions(); rebuildWidgets(); });
@@ -200,6 +200,40 @@ public final class CardEditorScreen extends Screen {
         replace(new FilterCategory(old.name(), old.iconItemId(), old.rules(), mode));
         rebuildWidgets();
     }
+    private void toggleFuzzy() {
+        if (!commitName()) return;
+        fuzzy = !fuzzy;
+        // When possible, update rules for the current reference item as well,
+        // so toggling fuzzy mode is not silently limited to future new rules.
+        if (hasCategory()) {
+            List<FilterRule> changed = new ArrayList<>();
+            String sampleId = sample.isEmpty() ? null : itemId(sample).toString();
+            String exact = !fuzzy && sampleId != null ? ExactItemBridge.encode(sample) : null;
+            int converted = 0;
+            for (FilterRule rule : current().rules()) {
+                FilterRule next = rule;
+                if (fuzzy && rule.kind() == FilterRule.Kind.EXACT_ITEM) {
+                    String id = ExactItemBridge.registryId(rule.value());
+                    if (id != null) {
+                        next = new FilterRule(FilterRule.Kind.ITEM, id, rule.exclude());
+                        converted++;
+                    }
+                } else if (!fuzzy && rule.kind() == FilterRule.Kind.ITEM
+                        && sampleId != null && sampleId.equals(rule.value()) && exact != null) {
+                    next = new FilterRule(FilterRule.Kind.EXACT_ITEM, exact, rule.exclude());
+                    converted++;
+                }
+                if (!changed.contains(next)) changed.add(next);
+            }
+            FilterCategory old = current();
+            replace(new FilterCategory(old.name(), old.iconItemId(), changed, old.mode()));
+            message((fuzzy ? "模糊匹配" : "精确匹配") + "；更新了 " + converted + " 条物品规则", false);
+        }
+        attributePage = 0;
+        refreshOptions();
+        rebuildWidgets();
+    }
+
     private void useSampleAsIcon() {
         if (!hasCategory() || sample.isEmpty() || !commitName()) {
             message("先选择分类和参考物品", true); return;

@@ -46,6 +46,13 @@ public final class ExactItemBridge {
         } catch (Exception e) { return ItemStack.EMPTY; }
     }
 
+    public static String registryId(String value) {
+        ItemStack reference = read(value);
+        return reference.isEmpty() ? null
+            : net.minecraft.core.registries.BuiltInRegistries.ITEM
+                .getKey(reference.getItem()).toString();
+    }
+
     public static boolean matches(String value, ItemStack candidate) {
         ItemStack reference = read(value);
         return !reference.isEmpty() && !candidate.isEmpty()
