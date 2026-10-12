@@ -27,6 +27,8 @@ import java.util.WeakHashMap;
 @EventBusSubscriber(modid = MultiFilterMod.ID, value = Dist.CLIENT)
 public final class GridTabs {
     private static final int PER_PAGE = 5;
+    private static final ResourceLocation LEGACY_SLOTS_TEXTURE = ResourceLocation.fromNamespaceAndPath(
+        MultiFilterMod.ID, "textures/gui/legacy_filter_slots.png");
     private static final Map<AbstractGridScreen<?>, TabState> STATES = new WeakHashMap<>();
     private GridTabs() {}
 
@@ -142,15 +144,10 @@ public final class GridTabs {
             state.session.updateCard(latest);
             state.refresh.run();
         }
-        // Vanilla menu slots draw and handle the actual installed filter cards.
-        // Draw a narrow border without intercepting regular slot interactions.
-        for (net.minecraft.world.inventory.Slot slot : screen.getMenu().slots) {
-            if (slot instanceof dev.rs2multifilter.minecraft.storage.InstalledCardSlot) {
-                int sx = screen.getGuiLeft() + slot.x;
-                int sy = screen.getGuiTop() + slot.y;
-                event.getGuiGraphics().renderOutline(sx - 1, sy - 1, 18, 18, 0xFF777777);
-            }
-        }
+        // Exact four-slot frame cropped from the classic RS GUI. The 16x16
+        // slot interiors are transparent so vanilla items remain visible.
+        event.getGuiGraphics().blit(LEGACY_SLOTS_TEXTURE,
+            screen.getGuiLeft() + 197, screen.getGuiTop(), 0, 0, 31, 82, 31, 82);
         for (IconButton icon : state.icons) {
             if (icon.button().visible)
                 event.getGuiGraphics().renderItem(icon.icon(), icon.button().getX() + 2, icon.button().getY() + 2);
