@@ -38,13 +38,15 @@ public final class GridTabs {
         final GridFilterSession session;
         final List<Button> slotButtons;
         final List<IconButton> icons;
+        final FilterCard[] activeCards;
         final Runnable refresh;
         TabState(FilterCard card, GridFilterSession session, List<Button> slotButtons,
-                 List<IconButton> icons, Runnable refresh) {
+                 List<IconButton> icons, FilterCard[] activeCards, Runnable refresh) {
             this.card = card;
             this.session = session;
             this.slotButtons = slotButtons;
             this.icons = icons;
+            this.activeCards = activeCards;
             this.refresh = refresh;
         }
     }
@@ -136,7 +138,7 @@ public final class GridTabs {
             next.active = (page[0] + 1) * PER_PAGE < total;
         };
         refresh[0].run();
-        STATES.put(screen, new TabState(initial, session, slotButtons, icons, refresh[0]));
+        STATES.put(screen, new TabState(initial, session, slotButtons, icons, current, refresh[0]));
     }
 
     private static ItemStack iconFor(String id) {
@@ -155,6 +157,7 @@ public final class GridTabs {
         FilterCard latest = ClientCardState.card(menuId);
         if (!latest.equals(state.card)) {
             state.card = latest;
+            state.activeCards[0] = latest;
             state.session.updateCard(latest);
             state.refresh.run();
         }
