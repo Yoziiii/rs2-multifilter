@@ -37,7 +37,7 @@ class FilterCardTest {
         var viewCreate = item("create:cogwheel", "c:gears");
         var viewCataclysm = item("cataclysm:weapon");
         var viewOther = item("minecraft:dirt");
-        var rules = RuleText.parse("+mod:create\\n+mod:cataclysm");
+        var rules = RuleText.parse("+mod:create\n+mod:cataclysm");
         var any = new FilterCategory("any", "minecraft:paper", rules, FilterCategory.Mode.ANY);
         var all = new FilterCategory("all", "minecraft:paper", rules, FilterCategory.Mode.ALL);
         var deny = new FilterCategory("deny", "minecraft:paper", rules, FilterCategory.Mode.DENY);
@@ -51,7 +51,7 @@ class FilterCardTest {
         var card = FilterCard.blank().withCategory(deny);
         assertEquals(card, CardWireCodec.decode(CardWireCodec.encode(card)));
         var veto = new FilterCategory("veto", "minecraft:paper",
-            RuleText.parse("+mod:create\\n-item:create:cogwheel"));
+            RuleText.parse("+mod:create\n-item:create:cogwheel"));
         assertFalse(veto.matches(viewCreate));
     }
 
