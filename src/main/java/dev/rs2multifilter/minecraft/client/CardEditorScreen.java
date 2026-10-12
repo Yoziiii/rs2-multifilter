@@ -14,6 +14,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.fml.ModList;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -265,6 +266,12 @@ public final class CardEditorScreen extends Screen {
             String id = itemId(sample).toString();
             g.drawString(font, truncate(sample.getHoverName().getString(), 23), x + 33, y + 100, 0xEEEEEE);
             g.drawString(font, truncate(id, 25), x + 12, y + 125, 0xAAAAAA);
+            String modName = ModList.get().getModContainerById(itemId(sample).getNamespace())
+                .map(container -> container.getModInfo().getDisplayName())
+                .orElse(itemId(sample).getNamespace());
+            long tagCount = sample.getTags().count();
+            g.drawString(font, "所属模组：" + truncate(modName, 24), x + 199, y + 76, 0xDDDDDD);
+            g.drawString(font, "可选标签：" + tagCount, x + 12, y + 166, 0xAAAAAA);
         } else g.drawString(font, "点击下方背包物品", x + 12, y + 108, 0xBBBBBB);
 
         if (selectedCategory >= 0) {
