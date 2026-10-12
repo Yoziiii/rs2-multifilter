@@ -143,7 +143,7 @@ public final class CardEditorScreen extends Screen {
 
     private void addCategory() {
         if (!storeName()) return;
-        if (working.categories().size() >= FilterCard.MAX_CATEGORIES) {
+        if (working.categories().size() >= FilterCard.MAX_PER_CARD) {
             notice("最多 64 个分类", true);
             return;
         }

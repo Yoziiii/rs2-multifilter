@@ -11,6 +11,7 @@ public final class CardWireCodec {
 
     public static String encode(FilterCard card) {
         Objects.requireNonNull(card);
+        if (card.categories().size() > FilterCard.MAX_PER_CARD) throw new IllegalArgumentException("单张卡最多 64 个分类");
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             try (DataOutputStream out = new DataOutputStream(bytes)) {
@@ -50,7 +51,7 @@ public final class CardWireCodec {
                 int version = in.readUnsignedByte();
                 if (version != (legacy ? 1 : FilterCard.VERSION)) throw new IllegalArgumentException("不支持的卡片版本");
                 int count = in.readUnsignedShort();
-                if (count > FilterCard.MAX_CATEGORIES) throw new IllegalArgumentException("分类数量超限");
+                if (count > FilterCard.MAX_PER_CARD) throw new IllegalArgumentException("分类数量超限");
                 List<FilterCategory> categories = new ArrayList<>(count);
                 for (int i = 0; i < count; i++) {
                     String name = in.readUTF();
