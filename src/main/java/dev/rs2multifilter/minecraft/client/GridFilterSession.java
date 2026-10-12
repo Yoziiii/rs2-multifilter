@@ -88,17 +88,32 @@ public final class GridFilterSession {
         if (!(resource instanceof ItemGridResource itemGrid)) return false;
         ItemStack stack = itemGrid.getItemStack();
         ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
-        boolean include = false;
-        boolean includesExist = false;
+        if (category.rules().isEmpty()) return false;
+        boolean includes = false;
+        boolean any = false;
+        boolean all = true;
         for (FilterRule rule : category.rules()) {
             boolean matched = switch (rule.kind()) {
                 case MOD -> id.getNamespace().equals(rule.value());
                 case ITEM -> id.toString().equals(rule.value());
                 case TAG -> stack.is(TagKey.create(Registries.ITEM, ResourceLocation.parse(rule.value())));
+                case FOOD -> stack.has(net.minecraft.core.component.DataComponents.FOOD);
+                case DAMAGED -> stack.isDamaged();
+                case ENCHANTED -> stack.isEnchanted();
             };
-            if (matched && rule.exclude()) return false;
-            if (!rule.exclude()) { includesExist = true; if (matched) include = true; }
+            if (rule.exclude()) {
+                if (matched) return false;
+            } else {
+                includes = true;
+                any |= matched;
+                all &= matched;
+            }
         }
-        return !includesExist || include;
+        if (!includes) return true;
+        return switch (category.mode()) {
+            case ANY -> any;
+            case ALL -> all;
+            case DENY -> !any;
+        };
     }
 }

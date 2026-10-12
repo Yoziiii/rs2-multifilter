@@ -3,7 +3,7 @@ package dev.rs2multifilter.core;
 import java.util.List;
 
 public record FilterCard(int dataVersion, List<FilterCategory> categories) {
-    public static final int VERSION = 1;
+    public static final int VERSION = 2;
     public static final int MAX_CATEGORIES = 64;
 
     public FilterCard {

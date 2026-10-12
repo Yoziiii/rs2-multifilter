@@ -37,6 +37,7 @@ public final class CardEditorScreen extends Screen {
     private EditBox nameField;
     private String feedback = "";
     private boolean error = false;
+    private boolean invertNextRule = false;
 
     public CardEditorScreen(FilterCard initial) {
         super(Component.literal("多分类过滤卡"));
@@ -64,6 +65,9 @@ public final class CardEditorScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("删除分类"), b -> removeCategory())
             .bounds(x + 321, y + 46, 82, 18).build());
 
+        addRenderableWidget(Button.builder(Component.literal("模式: " + (selectedCategory < 0 ? "—" : modeName(working.categories().get(selectedCategory).mode()))), b -> cycleMode())
+            .bounds(x + 198, y + 66, 201, 18)
+            .tooltip(Tooltip.create(Component.literal("任意匹配白名单 / 全匹配白名单 / 黑名单"))).build());
         addRenderableWidget(Button.builder(Component.literal("添加所属模组"), b -> addFromSample(FilterRule.Kind.MOD))
             .bounds(x + 198, y + 88, 201, 19)
             .tooltip(Tooltip.create(Component.literal("包括该模组的所有物品，可在同一分类中连续加入多个模组"))).build());
@@ -82,6 +86,9 @@ public final class CardEditorScreen extends Screen {
             rulesPage++;
             rebuildWidgets();
         }).bounds(x + 229, y + 271, 28, 18).build());
+        addRenderableWidget(Button.builder(Component.literal(invertNextRule ? "下一条：排除" : "下一条：包含"), b -> {
+            invertNextRule = !invertNextRule; rebuildWidgets();
+        }).bounds(x + 7, y + 266, 140, 18).build());
         addRenderableWidget(Button.builder(Component.literal("保存配置到卡片"), b -> save())
             .bounds(x + 265, y + 269, 135, 22).build());
 
@@ -118,7 +125,7 @@ public final class CardEditorScreen extends Screen {
         String name = nameField.getValue().trim();
         try {
             var categories = new ArrayList<>(working.categories());
-            categories.set(selectedCategory, new FilterCategory(name, current.iconItemId(), current.rules()));
+            categories.set(selectedCategory, new FilterCategory(name, current.iconItemId(), current.rules(), current.mode()));
             working = new FilterCard(FilterCard.VERSION, categories);
             return true;
         } catch (RuntimeException ex) {
@@ -168,7 +175,7 @@ public final class CardEditorScreen extends Screen {
         if (!storeName()) return;
         var id = itemId(sample);
         String value = kind == FilterRule.Kind.MOD ? id.getNamespace() : id.toString();
-        addRule(new FilterRule(kind, value, false));
+        addRule(new FilterRule(kind, value, invertNextRule));
     }
 
     private void addRule(FilterRule rule) {
@@ -180,7 +187,7 @@ public final class CardEditorScreen extends Screen {
         }
         if (rules.size() >= 256) { notice("单个分类最多 256 条规则", true); return; }
         rules.add(rule);
-        replaceCategory(new FilterCategory(category.name(), category.iconItemId(), rules));
+        replaceCategory(new FilterCategory(category.name(), category.iconItemId(), rules, category.mode()));
         rulesPage = (rules.size() - 1) / RULES_PAGE_SIZE;
         notice("已添加 " + rule.kind().name().toLowerCase() + " : " + rule.value(), false);
         rebuildWidgets();
@@ -206,7 +213,7 @@ public final class CardEditorScreen extends Screen {
         if (selectedCategory < 0 || sample.isEmpty()) { notice("先选择分类和样本物品", true); return; }
         if (!storeName()) return;
         FilterCategory old = working.categories().get(selectedCategory);
-        replaceCategory(new FilterCategory(old.name(), itemId(sample).toString(), old.rules()));
+        replaceCategory(new FilterCategory(old.name(), itemId(sample).toString(), old.rules(), old.mode()));
         notice("分类图标已改为 " + sample.getHoverName().getString(), false);
     }
 
@@ -216,8 +223,25 @@ public final class CardEditorScreen extends Screen {
         List<String> tags = sample.getTags().map(t -> t.location().toString()).sorted().toList();
         if (tags.isEmpty()) { notice("当前样本没有物品标签，可以改用所属模组", true); return; }
         Minecraft.getInstance().setScreen(new TagPickerScreen(this, tags, tag -> {
-            addRule(new FilterRule(FilterRule.Kind.TAG, tag, false));
+            addRule(new FilterRule(FilterRule.Kind.TAG, tag, invertNextRule));
         }));
+    }
+
+    private static String modeName(FilterCategory.Mode mode) {
+        return switch (mode) {
+            case ANY -> "任意白名单";
+            case ALL -> "全部白名单";
+            case DENY -> "黑名单";
+        };
+    }
+
+    private void cycleMode() {
+        if (selectedCategory < 0 || !storeName()) return;
+        FilterCategory old = working.categories().get(selectedCategory);
+        FilterCategory.Mode[] modes = FilterCategory.Mode.values();
+        replaceCategory(new FilterCategory(old.name(), old.iconItemId(), old.rules(),
+            modes[(old.mode().ordinal() + 1) % modes.length]));
+        rebuildWidgets();
     }
 
     private void save() {

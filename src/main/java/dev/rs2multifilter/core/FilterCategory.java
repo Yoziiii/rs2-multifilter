@@ -3,10 +3,17 @@ package dev.rs2multifilter.core;
 import java.util.List;
 import java.util.Objects;
 
-public record FilterCategory(String name, String iconItemId, List<FilterRule> rules) {
+/** Categories support Create-style OR whitelist, AND whitelist and blacklist. */
+public record FilterCategory(String name, String iconItemId, List<FilterRule> rules, Mode mode) {
+    public enum Mode { ANY, ALL, DENY }
+
+    public FilterCategory(String name, String iconItemId, List<FilterRule> rules) {
+        this(name, iconItemId, rules, Mode.ANY);
+    }
     public FilterCategory {
         Objects.requireNonNull(name);
         Objects.requireNonNull(iconItemId);
+        Objects.requireNonNull(mode);
         if (name.isBlank() || name.length() > 32) throw new IllegalArgumentException("Category name must be 1..32 characters");
         if (iconItemId.length() > 256) throw new IllegalArgumentException("Icon ID too long");
         rules = List.copyOf(rules);
@@ -15,15 +22,24 @@ public record FilterCategory(String name, String iconItemId, List<FilterRule> ru
 
     public boolean matches(FilterRule.ResourceView item) {
         if (rules.isEmpty()) return false;
-        boolean include = false;
-        boolean includesExist = false;
+        boolean hasInclude = false;
+        boolean any = false;
+        boolean all = true;
         for (FilterRule rule : rules) {
-            if (rule.exclude() && rule.matches(item)) return false;
-            if (!rule.exclude()) {
-                includesExist = true;
-                if (rule.matches(item)) include = true;
+            boolean match = rule.matches(item);
+            if (rule.exclude()) {
+                if (match) return false;
+            } else {
+                hasInclude = true;
+                any |= match;
+                all &= match;
             }
         }
-        return !includesExist || include;
+        if (!hasInclude) return true;
+        return switch (mode) {
+            case ANY -> any;
+            case ALL -> all;
+            case DENY -> !any;
+        };
     }
 }
