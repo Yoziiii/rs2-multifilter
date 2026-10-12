@@ -1,9 +1,8 @@
 package dev.rs2multifilter.minecraft.storage;
-
 import net.minecraft.world.item.ItemStack;
-
-/** Server-authoritative card storage attached to a placed Refined Storage grid. */
+/** Exactly four filter-card slots, as in the classic RS grid. */
 public interface InstalledCardHolder {
-    ItemStack rs2mf$getInstalledCard();
-    void rs2mf$setInstalledCard(ItemStack stack);
+    int SLOT_COUNT = 4;
+    ItemStack rs2mf$getInstalledCard(int slot);
+    void rs2mf$setInstalledCard(int slot, ItemStack stack);
 }
