@@ -10,10 +10,11 @@ public record FilterCategory(String name, String iconItemId, List<FilterRule> ru
         if (name.isBlank() || name.length() > 32) throw new IllegalArgumentException("Category name must be 1..32 characters");
         if (iconItemId.length() > 256) throw new IllegalArgumentException("Icon ID too long");
         rules = List.copyOf(rules);
-        if (rules.isEmpty() || rules.size() > 256) throw new IllegalArgumentException("Need 1..256 rules");
+        if (rules.size() > 256) throw new IllegalArgumentException("Too many rules");
     }
 
     public boolean matches(FilterRule.ResourceView item) {
+        if (rules.isEmpty()) return false;
         boolean include = false;
         boolean includesExist = false;
         for (FilterRule rule : rules) {
