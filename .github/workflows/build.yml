@@ -32,21 +32,36 @@ jobs:
           jar tf "$JAR" | grep -Fq 'rs2multifilter.mixins.json'
           jar tf "$JAR" | grep -Fq 'dev/rs2multifilter/minecraft/MultiFilterMod.class'
           jar tf "$JAR" | grep -Fq 'dev/rs2multifilter/minecraft/client/GridFilterSession.class'
+          jar tf "$JAR" | grep -Fq 'dev/rs2multifilter/minecraft/mixin/GridCardStorageMixin.class'
           jar tf "$JAR" | grep -Fq 'data/rs2multifilter/recipe/copy_filter_card.json'
       - name: Headless NeoForge server smoke test
         run: |
           mkdir -p run
           echo 'eula=true' > run/eula.txt
-          set +e
-          timeout 150s gradle runServer --console=plain > server-smoke.log 2>&1
-          RESULT=$?
-          set -e
-          tail -n 120 server-smoke.log
-          if grep -Eiq 'Done \(|For help, type|Preparing spawn area' server-smoke.log; then
-            echo "NeoForge reached Minecraft server initialization."
+          timeout 180s gradle runServer --console=plain > server-smoke.log 2>&1 &
+          SERVER_PID=$!
+          STARTED=0
+          for step in $(seq 1 105); do
+            if grep -Fq 'Done (' server-smoke.log; then
+              STARTED=1
+              break
+            fi
+            if grep -Fq 'Failed to start the minecraft server' server-smoke.log; then
+              break
+            fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          tail -n 90 server-smoke.log
+          kill "$SERVER_PID" 2>/dev/null || true
+          wait "$SERVER_PID" 2>/dev/null || true
+          if [ "$STARTED" = "1" ]; then
+            echo "NeoForge server fully started (Done)."
             exit 0
           fi
-          echo "Server did not reach expected startup markers (exit=$RESULT)."
+          echo "NeoForge server failed to reach Done."
           exit 1
       - uses: actions/upload-artifact@v4
         with:
