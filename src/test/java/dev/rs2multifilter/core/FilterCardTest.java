@@ -80,6 +80,15 @@ class FilterCardTest {
             filled.withCategory(new FilterCategory("extra", "minecraft:paper", List.of())));
     }
 
+    @Test void fuzzyItemMatchesSameIdAndExactKindIsSeparatelyPreserved() {
+        FilterRule fuzzy = new FilterRule(FilterRule.Kind.ITEM, "minecraft:netherite_sword", false);
+        assertTrue(fuzzy.matches(item("minecraft:netherite_sword")));
+        assertFalse(fuzzy.matches(item("minecraft:diamond_sword")));
+        FilterRule exact = new FilterRule(FilterRule.Kind.EXACT_ITEM, "exact:abcd", false);
+        assertFalse(exact.matches(item("minecraft:netherite_sword")));
+        assertEquals(FilterRule.Kind.EXACT_ITEM, exact.kind());
+    }
+
     @Test void rejectsCorruptData() {
         assertThrows(IllegalArgumentException.class, () -> CardWireCodec.decode("v1:garbage"));
         assertThrows(IllegalArgumentException.class, () -> CardWireCodec.decode("nonsense"));
