@@ -1,11 +1,24 @@
 {
   "type": "minecraft:crafting_shaped",
   "category": "misc",
-  "pattern": ["PRP", "RER", "PRP"],
+  "pattern": [
+    "EPE",
+    "PHP",
+    "EPE"
+  ],
   "key": {
-    "P": {"item": "minecraft:paper"},
-    "R": {"item": "minecraft:redstone"},
-    "E": {"item": "minecraft:ender_pearl"}
+    "E": {
+      "item": "refinedstorage:quartz_enriched_iron"
+    },
+    "P": {
+      "item": "minecraft:paper"
+    },
+    "H": {
+      "item": "minecraft:hopper"
+    }
   },
-  "result": {"id": "rs2multifilter:filter_card", "count": 1}
+  "result": {
+    "id": "rs2multifilter:filter_card",
+    "count": 1
+  }
 }
