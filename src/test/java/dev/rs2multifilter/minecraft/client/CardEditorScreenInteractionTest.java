@@ -52,6 +52,10 @@ class CardEditorScreenInteractionTest {
             String text = call.getArgument(0);
             return text.substring(0, Math.min(text.length(), Math.max(0, call.<Integer>getArgument(1) / 6)));
         });
+        when(font.plainSubstrByWidth(anyString(), anyInt(), anyBoolean())).thenAnswer(call -> {
+            String text = call.getArgument(0);
+            return text.substring(0, Math.min(text.length(), Math.max(0, call.<Integer>getArgument(1) / 6)));
+        });
         Field fontField = Screen.class.getDeclaredField("font");
         fontField.setAccessible(true);
         fontField.set(screen, font);
