@@ -59,8 +59,8 @@ public final class GridTabs {
         GridFilterSession session = old == null ? GridFilterSession.attach(screen.getMenu(), selection.card()) : old.session;
         session.updateCard(selection.card());
         session.select(selection.selected());
-        int x = screen.getGuiLeft() + 4, y = Math.max(0, screen.getGuiTop() - 23) + 3;
-        int width = barWidth(screen) - 8;
+        int x = screen.getGuiLeft(), y = Math.max(0, screen.getGuiTop() - 23);
+        int width = barWidth(screen);
         var font = Minecraft.getInstance().font;
         CategoryNavigation[] navigation = {new CategoryNavigation(selection.card().categories().stream()
             .map(c -> c.name()).toList(), font::width, width)};
@@ -77,10 +77,10 @@ public final class GridTabs {
             tabs.add(tab);
             event.addListener(tab);
         }
-        var previous = new EditorButton(x + navigation[0].previousX(), y, 16, 18,
+        var previous = new EditorButton(x + navigation[0].previousX(), y + 3, 16, 18,
             Component.literal("上一页分类"), b -> { page[0] = navigation[0].clamp(page[0] - 1); refresh[0].run(); });
         previous.setIcon(EditorIcon.PREVIOUS);
-        var next = new EditorButton(x + navigation[0].nextX(), y, 16, 18,
+        var next = new EditorButton(x + navigation[0].nextX(), y + 3, 16, 18,
             Component.literal("下一页分类"), b -> { page[0] = navigation[0].clamp(page[0] + 1); refresh[0].run(); });
         next.setIcon(EditorIcon.NEXT);
         event.addListener(previous);
@@ -105,9 +105,9 @@ public final class GridTabs {
                 button.setWidth(tab.width());
                 String title = tab.category() < 0 ? "全部" : card.categories().get(tab.category()).name();
                 button.setMessage(Component.literal(title));
-                button.icon = tab.category() < 0 ? ItemStack.EMPTY : iconFor(card.categories().get(tab.category()).iconItemId());
+                button.icon = tab.category() < 0 ? new ItemStack(Items.GRASS_BLOCK) : iconFor(card.categories().get(tab.category()).iconItemId());
                 button.setTooltip(Tooltip.create(Component.literal(tab.category() < 0
-                    ? "全部物品：保留终端原有搜索与显示设置"
+                    ? "全部\n显示全部物品，保留终端原有搜索与显示设置"
                     : title + " · " + (tab.category() + 1) + "/" + card.categories().size())));
             }
             previous.visible = next.visible = navigation[0].paginated();
@@ -118,7 +118,7 @@ public final class GridTabs {
             next.setTooltip(Tooltip.create(Component.literal("下一页分类 · " + pages)));
         };
         screen.addSideButton(new RememberCategoryButton(selection));
-        screen.getExclusionZones().add(new Rect2i(screen.getGuiLeft(), y - 3, barWidth(screen), 24));
+        screen.getExclusionZones().add(new Rect2i(screen.getGuiLeft(), y, barWidth(screen), 24));
         screen.getExclusionZones().add(new Rect2i(screen.getGuiLeft() + 197, screen.getGuiTop(), 30, 82));
         STATES.put(screen, new TabState(session, selection, refresh[0]));
         refresh[0].run();
@@ -150,7 +150,6 @@ public final class GridTabs {
         // The unmodified RS upgrade panel is exactly 30x82 at UV 180,0.
         // Its 4 opaque slots align with the existing menu at 204,6 + n*18.
         g.blit(RsUi.FILTER, x + 197, y, 180, 0, 30, 82);
-        RsUi.panel(g, x, Math.max(0, y - 23), barWidth(screen), 24);
     }
     @SubscribeEvent public static void onScreenRender(ScreenEvent.Render.Post event) {
         if (!(event.getScreen() instanceof AbstractGridScreen<?> screen)) return;
@@ -169,19 +168,18 @@ public final class GridTabs {
         ItemStack icon = ItemStack.EMPTY;
         int category = -1;
         boolean chosen;
-        TabButton(int x, int y, OnPress press) { super(x, y, 34, 18, Component.literal("全部"), press); }
+        TabButton(int x, int y, OnPress press) {
+            super(x, y, CategoryNavigation.TAB_WIDTH, CategoryNavigation.TAB_HEIGHT, Component.literal("全部"), press);
+        }
         @Override protected void renderWidget(GuiGraphics g, int mx, int my, float tick) {
-            RsUi.panel(g, getX(), getY(), getWidth(), getHeight());
-            if (chosen || isHoveredOrFocused()) g.fill(getX() + 4, getY() + 4,
-                getX() + getWidth() - 4, getY() + getHeight() - 4, chosen ? 0xFFDAEBF0 : 0xFFE3E3DF);
-            if (chosen) g.fill(getX() + 4, getY() + getHeight() - 3, getX() + getWidth() - 4,
-                getY() + getHeight() - 2, 0xFF3B8198);
-            boolean hasIcon = !icon.isEmpty();
-            if (hasIcon) g.renderItem(icon, getX() + 3, getY() + 1);
-            var font = Minecraft.getInstance().font;
-            String text = EditorText.fit(getMessage().getString(), getWidth() - (hasIcon ? 24 : 8), font::width);
-            int textX = hasIcon ? getX() + 21 : getX() + (getWidth() - font.width(text)) / 2;
-            g.drawString(font, text, textX, getY() + 5, chosen ? 0xFF245B70 : 0xFF404648, false);
+            RsUi.iconTab(g, getX(), getY());
+            g.pose().pushPose();
+            g.pose().translate(0, 0, 1);
+            if (chosen || isHoveredOrFocused()) g.fill(getX() + 7, getY() + 4,
+                getX() + 23, getY() + 20, chosen ? 0xFFBDD0D6 : 0xFFA8A8A8);
+            g.renderItem(icon, getX() + 7, getY() + 4);
+            g.pose().popPose();
+            // Message is narration/tooltip data only; no label is drawn inside a tab.
         }
     }
 }

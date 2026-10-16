@@ -54,6 +54,18 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         if (!working.categories().isEmpty()) category = 0;
     }
 
+    /** Marker for the narrow name-text rendering correction; native editing is unchanged. */
+    public static final class NameField extends EditBox {
+        public NameField(net.minecraft.client.gui.Font font, int x, int y, int w, int h, Component label) {
+            super(font, x, y, w, h, label);
+        }
+        public static int drawPlain(net.minecraft.client.gui.GuiGraphics g, net.minecraft.client.gui.Font font,
+                                    net.minecraft.util.FormattedCharSequence text, int x, int y, int color) {
+            // EditBox expects the shadowed renderer's +1 return for cursor/suffix placement.
+            return g.drawString(font, text, x, y, color, false) + 1;
+        }
+    }
+
     private int left() { return leftPos; }
     private int top() { return topPos; }
 
@@ -61,7 +73,7 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         String draft = name != null && displayedCategory == category ? name.getValue()
             : hasCategory() ? current().name() : "";
         super.init();
-        name = new EditBox(font, left() + NAME.x() + 4, top() + NAME.y() + 5, NAME.width() - 8, 9,
+        name = new NameField(font, left() + NAME.x() + 4, top() + NAME.y() + 5, NAME.width() - 8, 9,
             Component.literal("分类名称"));
         name.setBordered(false);
         name.setTextColor(0xFF404648);
@@ -519,8 +531,6 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         g.fill(x + 4, y + 4, x + W - 4, y + 16, 0xFFD5D5D0);
         String title = "过滤升级";
         g.drawString(font, title, x + (W - font.width(title)) / 2, y + 4, 0xFF404040, false);
-        // One continuous RS-style category strip instead of separate dark buttons.
-        RsUi.panel(g, x + 5, y + 18, W - 10, 24);
         g.fill(x + NAME.x(), y + NAME.y(), x + NAME.x() + NAME.width(), y + NAME.y() + NAME.height(), 0xFFF0F0EA);
         g.fill(x + NAME.x(), y + NAME.y(), x + NAME.x() + NAME.width(), y + NAME.y() + 1, 0xFF777B7B);
         if (hasCategory()) {
@@ -537,9 +547,6 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
             g.renderItem(stack, 0, 0);
             g.pose().popPose();
         }
-        RsUi.panel(g, x + 1, y + 84, W - 2, CONFIG_HEIGHT - 85);
-        g.fill(x + 84, y + 92, x + 85, y + 112, 0xFF858580);
-        g.fill(x + 246, y + 92, x + 247, y + 112, 0xFF858580);
         slotFrame(g, x + REFERENCE_X, y + REFERENCE_Y);
         if (noticeTicks > 0)
             g.drawString(font, EditorText.fit(notice, W - 52, font::width), x + 42, y + 75,

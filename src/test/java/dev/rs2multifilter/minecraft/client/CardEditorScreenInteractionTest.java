@@ -116,6 +116,18 @@ class CardEditorScreenInteractionTest {
         screen.renderBg(g, 0, 0, 0);
         verify(g).drawString(eq(font), eq("过滤升级"), anyInt(), anyInt(), anyInt(), eq(false));
         verify(g, never()).drawCenteredString(any(Font.class), anyString(), anyInt(), anyInt(), anyInt());
+        int left = (screen.width - CardEditorLayout.WIDTH) / 2, top = (screen.height - CardEditorLayout.HEIGHT) / 2;
+        verify(g, never()).blit(eq(RsUi.FILTER), eq(left + 5), eq(top + 18), eq(4), eq(4), eq(0f), eq(0f), eq(4), eq(4), eq(256), eq(256));
+        verify(g, never()).blit(eq(RsUi.FILTER), eq(left + 1), eq(top + 84), eq(4), eq(4), eq(0f), eq(0f), eq(4), eq(4), eq(256), eq(256));
+    }
+
+    @Test void nameUsesNativeEditingAndPlainTextPreservesTheCursorWidthContract() throws Exception {
+        assertInstanceOf(CardEditorScreen.NameField.class, field("name"));
+        var text = net.minecraft.util.FormattedCharSequence.forward("分类名称", net.minecraft.network.chat.Style.EMPTY);
+        var g = mock(net.minecraft.client.gui.GuiGraphics.class);
+        when(g.drawString(font, text, 10, 20, 0x404040, false)).thenReturn(34);
+        assertEquals(35, CardEditorScreen.NameField.drawPlain(g, font, text, 10, 20, 0x404040));
+        verify(g).drawString(font, text, 10, 20, 0x404040, false);
     }
 
     @Test void toolbarUsesPixelIconsWithAccessibleNamesAndUnchangedActions() {

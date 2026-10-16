@@ -37,8 +37,8 @@ public class EditorButton extends Button {
         if (compact) g.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(),
             isHoveredOrFocused() ? 0xFFDFE5E5 : 0xFFD0D0CC);
         else {
-            RsUi.panel(g, getX(), getY(), getWidth(), getHeight());
-            g.fill(getX() + 4, getY() + 4, getX() + getWidth() - 4, getY() + getHeight() - 4, color);
+            g.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0xFF747671);
+            g.fill(getX() + 1, getY() + 1, getX() + getWidth() - 1, getY() + getHeight() - 1, color);
         }
         if (icon != null) {
             icon.render(g, getX() + getWidth() / 2, getY() + getHeight() / 2,

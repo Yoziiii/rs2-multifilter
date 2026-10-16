@@ -27,9 +27,12 @@ public final class RememberCategoryButton extends AbstractSideButtonWidget {
     @Override protected Component getHelpText() { return Component.literal("自动保存设置；仅恢复同一世界／服务器内相同过滤配置的分类。"); }
     @Override public void renderWidget(GuiGraphics g, int mx, int my, float tick) {
         g.blitSprite(RsUi.id(isHovered ? "widget/side_button/hovered" : "widget/side_button/base"), getX(), getY(), SIZE, SIZE);
+        // Keep the solid icon above the textured base, using native-sidebar charcoal.
+        g.pose().pushPose();
+        g.pose().translate(0, 0, 1);
         EditorIcon.PIN.render(g, getX() + 9, getY() + 8,
-            selection.remembersCategory() ? 0xFF318EB2 : 0xFF666666);
-        if (selection.remembersCategory()) g.fill(getX() + 4, getY() + 14, getX() + 14, getY() + 15, 0xFF318EB2);
+            selection.remembersCategory() ? 0xFF363A3C : 0xFF505456);
+        g.pose().popPose();
         if (isHovered && Minecraft.getInstance().screen instanceof AbstractBaseScreen<?> screen)
             screen.setDeferredTooltip(buildTooltip());
     }

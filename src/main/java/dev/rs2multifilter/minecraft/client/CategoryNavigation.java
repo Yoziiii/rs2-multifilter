@@ -6,16 +6,16 @@ import java.util.function.ToIntFunction;
 
 /** Display-only paging. -1 is All; custom indices are never shifted or rewritten. */
 public final class CategoryNavigation {
-    public static final int GAP = 2, ARROWS = 34;
+    public static final int GAP = 2, ARROWS = 34, TAB_WIDTH = 30, TAB_HEIGHT = 24;
     public record Tab(int category, int x, int width) {}
     private final List<List<Tab>> pages;
     private final int width;
 
-    public CategoryNavigation(List<String> names, ToIntFunction<String> textWidth, int width) {
+    public CategoryNavigation(List<String> names, ToIntFunction<String> ignoredTextWidth, int width) {
         if (width < 112) throw new IllegalArgumentException("Navigation is too narrow");
         this.width = width;
-        int allWidth = Math.max(28, Math.min(36, textWidth.applyAsInt("全部") + 10));
-        int[] sizes = names.stream().mapToInt(n -> Math.max(34, Math.min(56, textWidth.applyAsInt(n) + 24))).toArray();
+        int allWidth = TAB_WIDTH;
+        int[] sizes = names.stream().mapToInt(n -> TAB_WIDTH).toArray();
         int total = allWidth;
         for (int size : sizes) total += GAP + size;
         int limit = width - (total > width ? ARROWS : 0);

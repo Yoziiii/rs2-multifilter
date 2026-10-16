@@ -27,4 +27,10 @@ public final class RsUi {
     public static void slot(GuiGraphics g, int x, int y) {
         g.blitSprite(id("slot"), x - 1, y - 1, 18, 18);
     }
+    /** Independent compact cap from the same native panel as the four upgrade slots. */
+    public static void iconTab(GuiGraphics g, int x, int y) {
+        g.blit(FILTER, x, y, 180, 0, 30, 3);
+        g.blit(FILTER, x, y + 3, 180, 5, 30, 18);
+        g.blit(FILTER, x, y + 21, 180, 79, 30, 3);
+    }
 }

@@ -201,13 +201,58 @@ class GridTerminalInteractionTest {
             buttons.get(7).onPress();
             assertVisible(Items.DIRT, Items.STONE);
             assertEquals("全部", buttons.get(0).getMessage().getString());
-            assertEquals("C3", buttons.get(1).getMessage().getString());
-            buttons.get(1).onPress();
+            assertEquals("C4", buttons.get(1).getMessage().getString());
+            buttons.get(2).onPress();
             assertVisible(Items.STONE);
             buttons.get(7).onPress();
             assertVisible(Items.STONE);
             buttons.get(0).onPress();
             assertVisible(Items.DIRT, Items.STONE);
+            assertEquals(card, ClientCardState.card(menu.containerId));
+        } finally {
+            GridTabs.onScreenClosing(closing);
+            preferenceField.set(null, before);
+        }
+    }
+
+    @Test void tabUsesTheGrassBlockOrConfiguredIconAndNeverDrawsItsName() throws Exception {
+        var card = FilterCard.blank().withCategory(new FilterCategory("只在悬停显示的完整名称", "minecraft:stone", List.of()));
+        for (int i = 0; i < 4; i++) ClientCardState.update(menu.containerId, i, i == 0 ? CardWireCodec.encode(card) : "");
+        var preferenceField = GridTabs.class.getDeclaredField("preferences");
+        preferenceField.setAccessible(true);
+        Object before = preferenceField.get(null);
+        preferenceField.set(null, new GridPreferences(settingsDirectory.resolve("icons.properties")));
+        var screen = mock(AbstractGridScreen.class);
+        when(screen.getMenu()).thenReturn(menu);
+        when(screen.getGuiLeft()).thenReturn(50);
+        when(screen.getGuiTop()).thenReturn(30);
+        when(screen.getXSize()).thenReturn(193);
+        when(screen.getExclusionZones()).thenReturn(new java.util.ArrayList<>());
+        screen.width = 320;
+        var init = mock(ScreenEvent.Init.Post.class);
+        when(init.getScreen()).thenReturn(screen);
+        var closing = mock(ScreenEvent.Closing.class);
+        when(closing.getScreen()).thenReturn(screen);
+        try (var client = mockStatic(Minecraft.class)) {
+            var minecraft = mock(Minecraft.class);
+            var font = mock(net.minecraft.client.gui.Font.class);
+            var fontField = Minecraft.class.getDeclaredField("font");
+            fontField.setAccessible(true); fontField.set(minecraft, font);
+            client.when(Minecraft::getInstance).thenReturn(minecraft);
+            GridTabs.onScreenInit(init);
+            var captured = org.mockito.ArgumentCaptor.forClass(net.minecraft.client.gui.components.events.GuiEventListener.class);
+            verify(init, times(8)).addListener(captured.capture());
+            var buttons = captured.getAllValues().stream().map(EditorButton.class::cast).toList();
+            var g = mock(GuiGraphics.class);
+            when(g.pose()).thenReturn(new com.mojang.blaze3d.vertex.PoseStack());
+            buttons.get(0).renderWidget(g, -1, -1, 0);
+            buttons.get(1).renderWidget(g, -1, -1, 0);
+            verify(g).renderItem(argThat(s -> s.is(Items.GRASS_BLOCK)), anyInt(), anyInt());
+            verify(g).renderItem(argThat(s -> s.is(Items.STONE)), anyInt(), anyInt());
+            verify(g, never()).drawString(any(net.minecraft.client.gui.Font.class), anyString(), anyInt(), anyInt(), anyInt(), anyBoolean());
+            assertEquals("只在悬停显示的完整名称", buttons.get(1).getMessage().getString());
+            assertNotNull(buttons.get(1).getTooltip());
+            assertEquals(CategoryNavigation.GAP, buttons.get(1).getX() - buttons.get(0).getX() - buttons.get(0).getWidth());
             assertEquals(card, ClientCardState.card(menu.containerId));
         } finally {
             GridTabs.onScreenClosing(closing);

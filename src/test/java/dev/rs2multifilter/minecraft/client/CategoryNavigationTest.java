@@ -63,6 +63,14 @@ class CategoryNavigationTest {
         assertEquals(-1, nav.tabs(0).getFirst().category());
         assertFalse(nav.paginated());
     }
+    @Test void iconTabSizesNeverDependOnCategoryNameWidth() {
+        var names = List.of("短", "很长的分类名称".repeat(4), "3", "4", "5");
+        var nav = new CategoryNavigation(names, s -> { throw new AssertionError("Icon tabs must not measure text"); }, 193);
+        assertFalse(nav.paginated());
+        assertEquals(6, nav.tabs(0).size());
+        assertTrue(nav.tabs(0).stream().allMatch(t -> t.width() == 30));
+        assertEquals(List.of(-1, 0, 1, 2, 3, 4), nav.tabs(0).stream().map(CategoryNavigation.Tab::category).toList());
+    }
     @Test void smallGuiScalesReserveHeaderSpaceWithoutOverlappingTheNativeTitle() {
         for (int height : new int[]{240, 270, 360, 540}) {
             for (int bottom : new int[]{99, 156}) {
