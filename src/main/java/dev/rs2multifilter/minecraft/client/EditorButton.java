@@ -9,6 +9,7 @@ import net.minecraft.network.chat.Component;
 public class EditorButton extends Button {
     private boolean selected;
     private int accent = 0xFF348C56;
+    private boolean compact;
 
     public EditorButton(int x, int y, int width, int height, Component label, OnPress press) {
         super(x, y, width, height, label, press, DEFAULT_NARRATION);
@@ -16,6 +17,7 @@ public class EditorButton extends Button {
 
     public void setSelected(boolean selected) { this.selected = selected; }
     public void setAccent(int accent) { this.accent = accent; }
+    public void setCompact(boolean compact) { this.compact = compact; }
 
     public static void frame(GuiGraphics g, int x, int y, int w, int h, int fill) {
         g.fill(x, y, x + w, y + h, 0xFF24211F);
@@ -29,10 +31,14 @@ public class EditorButton extends Button {
     @Override protected void renderWidget(GuiGraphics g, int mx, int my, float tick) {
         int color = !active ? 0xFF686965 : selected ? accent
             : isHoveredOrFocused() ? 0xFFAAA9A1 : 0xFF898A87;
-        frame(g, getX(), getY(), getWidth(), getHeight(), color);
+        if (compact) g.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(),
+            isHoveredOrFocused() ? 0xFFC9C1AA : 0xFFDAD3BF);
+        else frame(g, getX(), getY(), getWidth(), getHeight(), color);
         var font = Minecraft.getInstance().font;
         String label = EditorText.fit(getMessage().getString(), getWidth() - 6, font::width);
-        g.drawCenteredString(font, label, getX() + getWidth() / 2,
+        if (compact) g.drawString(font, label, getX() + 3, getY() + (getHeight() - 8) / 2,
+            accent == 0xFF348C56 ? 0xFF365B3D : 0xFF85502D, false);
+        else g.drawCenteredString(font, label, getX() + getWidth() / 2,
             getY() + (getHeight() - 8) / 2, active ? 0xFFF4F0E8 : 0xFFA8A8A0);
     }
 }

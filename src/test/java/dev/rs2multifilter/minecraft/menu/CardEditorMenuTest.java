@@ -112,6 +112,16 @@ class CardEditorMenuTest {
         verify(player, never()).drop(any(ItemStack.class), anyBoolean());
     }
 
+    @Test void rightClickingReferenceClearsOnlyTheGhostWithoutASeparateButton() {
+        inventory.setItem(9, new ItemStack(Items.REDSTONE, 64));
+        menu.clicked(0, 0, ClickType.PICKUP, player);
+        menu.clicked(CardEditorMenu.REFERENCE_SLOT, 1, ClickType.PICKUP, player);
+        assertTrue(menu.referenceItem().isEmpty());
+        assertEquals(64, inventory.getItem(9).getCount());
+        assertTrue(menu.getCarried().isEmpty());
+        verify(player, never()).drop(any(ItemStack.class), anyBoolean());
+    }
+
     @Test void unsupportedClicksCannotChangePlayerInventory() {
         ItemStack source = new ItemStack(Items.REDSTONE, 64);
         inventory.setItem(9, source);

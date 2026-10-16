@@ -60,4 +60,13 @@ class CardEditorLayoutTest {
             }
         }
     }
+
+    @Test void inlineRulesDoNotCoverInventoryReferenceOrConfiguration() {
+        assertFalse(RULE_PANEL.intersects(INVENTORY));
+        assertFalse(RULE_PANEL.intersects(new Rect(0, 0, WIDTH, CONFIG_HEIGHT)));
+        assertTrue(RULE_PANEL.contains(RULE_LIST.x(), RULE_LIST.y()));
+        assertTrue(RULE_PANEL.contains(RULE_LIST.x() + RULE_LIST.width() - 1, RULE_LIST.y() + RULE_LIST.height() - 1));
+        assertTrue(RULE_PANEL.x() + RULE_PANEL.width() <= WIDTH);
+        assertTrue(RULE_PANEL.y() + RULE_PANEL.height() <= HEIGHT);
+    }
 }

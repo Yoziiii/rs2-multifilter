@@ -2,6 +2,7 @@ package dev.rs2multifilter.minecraft.client;
 
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 
 import java.util.List;
 import java.util.function.IntConsumer;
@@ -39,7 +40,22 @@ public final class AttributeSelector extends RuleEntryButton {
         Entry option = options.get(selected);
         setMessage(option.title());
         setClipboardValue(option.clipboard());
-        setTooltip(Tooltip.create(option.tooltip()));
+        setTooltip(null);
+    }
+
+    public List<Component> hoverLines(Component sampleName, int visibleEntries) {
+        if (!active || !visible || options.isEmpty()) return List.of();
+        int count = Math.max(1, Math.min(options.size(), visibleEntries));
+        int start = Math.max(0, Math.min(selected - count / 2, options.size() - count));
+        var lines = new java.util.ArrayList<Component>();
+        lines.add(sampleName.copy().append(" · " + (selected + 1) + "/" + options.size()).withStyle(ChatFormatting.BLUE));
+        if (start > 0) lines.add(Component.literal("> …").withStyle(ChatFormatting.DARK_GRAY));
+        for (int i = start; i < start + count; i++)
+            lines.add(Component.literal(i == selected ? "-> " : "> ").append(options.get(i).title())
+                .withStyle(i == selected ? ChatFormatting.WHITE : ChatFormatting.GRAY));
+        if (start + count < options.size()) lines.add(Component.literal("> …").withStyle(ChatFormatting.DARK_GRAY));
+        lines.add(Component.literal("滚动选择").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
+        return List.copyOf(lines);
     }
 
     @Override public boolean mouseScrolled(double x, double y, double dx, double dy) {

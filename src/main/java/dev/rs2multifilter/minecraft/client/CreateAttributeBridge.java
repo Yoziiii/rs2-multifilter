@@ -47,7 +47,7 @@ public final class CreateAttributeBridge {
                     String encoded = "create:" + HEX.formatHex(nbt.toString().getBytes(StandardCharsets.UTF_8));
                     if (encoded.length() > 4096 || encoded.length() < 9) continue;
                     String title = ((Component) format.invoke(attr, false)).getString();
-                    if (title.isBlank()) title = attr.getClass().getSimpleName();
+                    if (title.isBlank()) title = "Create 附属属性";
                     result.add(new Attribute(title, encoded));
                     CACHE.put(encoded, attr);
                 } catch (ReflectiveOperationException ignored) {

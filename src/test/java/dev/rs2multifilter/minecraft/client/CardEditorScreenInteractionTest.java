@@ -95,10 +95,9 @@ class CardEditorScreenInteractionTest {
         assertEquals(initial, field("working"));
     }
 
-    @Test void popupWheelIsLocalAndDoesNotSelectAnAttributeOrEditRules() throws Exception {
-        invoke("openRules");
+    @Test void inlineRuleWheelIsLocalAndDoesNotSelectAnAttributeOrEditRules() throws Exception {
         var area = (CardEditorLayout.Rect) field("ruleArea");
-        assertTrue(screen.mouseScrolled(1, 1, 0, -1));
+        assertFalse(screen.mouseScrolled(1, 1, 0, -1));
         assertEquals(0, field("ruleOffset"));
         for (int i = 0; i < 20; i++) screen.mouseScrolled(area.x() + 1, area.y() + 1, 0, -1);
         assertEquals(4, field("ruleOffset"));
@@ -106,22 +105,24 @@ class CardEditorScreenInteractionTest {
         assertEquals(initial, field("working"));
     }
 
-    @Test void rightClickingPopupDeleteAndThenReleasingCannotDeleteOrReachTheMenu() throws Exception {
-        invoke("openRules");
-        int x = (int) field("popupX") + 222, y = (int) field("popupY") + 28;
+    @Test void rightClickingInlineDeleteAndThenReleasingCannotDeleteOrReachTheMenu() throws Exception {
+        var area = (CardEditorLayout.Rect) field("ruleArea");
+        int x = area.x() + area.width() - 12, y = area.y() + 2;
         assertTrue(screen.mouseClicked(x, y, 1));
         assertTrue(screen.mouseReleased(x, y, 1));
         assertEquals(initial, field("working"));
         verify(menu, never()).clicked(anyInt(), anyInt(), any(), any());
     }
 
-    @Test void closingPopupConsumesBothClickAndReleaseWithoutChangingConfiguration() throws Exception {
-        invoke("openRules");
-        assertTrue(screen.mouseClicked(1, 1, 1));
-        assertEquals(false, field("rulesOpen"));
-        assertTrue(screen.mouseReleased(1, 1, 1));
+    @Test void inlineRuleManagementNeverCoversTheSelectorOrRealInventory() throws Exception {
+        var area = (CardEditorLayout.Rect) field("ruleArea");
+        int left = (screen.width - CardEditorLayout.WIDTH) / 2;
+        int top = (screen.height - CardEditorLayout.HEIGHT) / 2;
+        assertFalse(area.contains(left + CardEditorLayout.REFERENCE_X, top + CardEditorLayout.REFERENCE_Y));
+        assertFalse(area.contains(left + CardEditorLayout.INVENTORY_X, top + CardEditorLayout.INVENTORY_Y));
+        assertFalse(area.contains(left + CardEditorLayout.ATTRIBUTE.x(), top + CardEditorLayout.ATTRIBUTE.y()));
+        assertFalse(screen.mouseScrolled(left + CardEditorLayout.INVENTORY_X, top + CardEditorLayout.INVENTORY_Y, 0, -1));
         assertEquals(initial, field("working"));
-        verify(menu, never()).clicked(anyInt(), anyInt(), any(), any());
     }
 
     @Test void rebuildingForViewportChangeKeepsTheDraftAndRealignsSelector() throws Exception {
@@ -157,11 +158,10 @@ class CardEditorScreenInteractionTest {
     }
 
     @Test void deletingAfterScrollingRemovesExactlyTheDisplayedRule() throws Exception {
-        invoke("openRules");
         var area = (CardEditorLayout.Rect) field("ruleArea");
         screen.mouseScrolled(area.x() + 1, area.y() + 1, 0, -1);
         @SuppressWarnings("unchecked") var widgets = (List<EditorButton>) field("ruleWidgets");
-        widgets.get(2).onPress();
+        widgets.get(1).onPress();
         var rules = ((FilterCard) field("working")).categories().getFirst().rules();
         assertEquals(8, rules.size());
         assertFalse(rules.contains(initial.categories().getFirst().rules().get(1)));
@@ -169,17 +169,25 @@ class CardEditorScreenInteractionTest {
         assertTrue(rules.contains(initial.categories().getFirst().rules().getLast()));
     }
 
-    @Test void rulePopupFitsAllSupportedViewportSizes() throws Exception {
+    @Test void inlineRulesFitAllSupportedViewportSizes() throws Exception {
         for (int[] viewport : new int[][]{{320, 240}, {426, 240}, {480, 270}, {640, 360}, {960, 540}}) {
             screen.width = viewport[0];
             screen.height = viewport[1];
             screen.init();
-            invoke("openRules");
-            int x = (int) field("popupX"), y = (int) field("popupY");
-            assertTrue(x >= 4 && y >= 4);
-            assertTrue(x + 248 <= screen.width - 4);
-            assertTrue(y + 142 <= screen.height - 4);
+            var area = (CardEditorLayout.Rect) field("ruleArea");
+            assertTrue(area.x() >= 0 && area.y() >= 0);
+            assertTrue(area.x() + area.width() <= screen.width);
+            assertTrue(area.y() + area.height() <= screen.height);
         }
+    }
+
+    @Test void hoveringSelectorExposesMultipleCandidatesAndLeavingClosesThem() throws Exception {
+        var selector = (AttributeSelector) field("selector");
+        var shown = screen.candidateTooltipAt(selector.getX() + 1, selector.getY() + 1, 16);
+        assertEquals(2, shown.stream().filter(c -> c.getString().startsWith("> ") || c.getString().startsWith("-> ")).count());
+        assertTrue(screen.candidateTooltipAt(0, 0, 16).isEmpty());
+        assertTrue(screen.candidateTooltipAt(selector.getX() + selector.getWidth(), selector.getY(), 16).isEmpty());
+        assertEquals(initial, field("working"));
     }
 
     @Test void anUnsupportedLongCandidateCannotCrashOpeningOrCorruptExistingRules() throws Exception {
@@ -194,6 +202,69 @@ class CardEditorScreenInteractionTest {
         ((EditorButton) field("includeButton")).onPress();
         assertEquals(initial, field("working"));
         assertEquals(true, field("isError"));
+    }
+
+    @Test void categoryCreationSwitchDeletionAndDraftCommitKeepExistingRules() throws Exception {
+        ((EditBox) field("name")).setValue("第一类的新名字");
+        invoke("addCategory");
+        var card = (FilterCard) field("working");
+        assertEquals(2, card.categories().size());
+        assertEquals("第一类的新名字", card.categories().getFirst().name());
+        assertEquals(initial.categories().getFirst().rules(), card.categories().getFirst().rules());
+        var move = CardEditorScreen.class.getDeclaredMethod("moveCategory", int.class);
+        move.setAccessible(true);
+        move.invoke(screen, -1);
+        assertEquals(0, field("category"));
+        invoke("deleteCategory");
+        assertEquals(1, ((FilterCard) field("working")).categories().size());
+    }
+
+    @Test void modeButtonsPreserveTheOrdinaryAndExcludeRules() throws Exception {
+        for (var pair : java.util.Map.of(CardEditorLayout.ANY, FilterCategory.Mode.ANY,
+                CardEditorLayout.ALL, FilterCategory.Mode.ALL, CardEditorLayout.DENY, FilterCategory.Mode.DENY).entrySet()) {
+            button(pair.getKey()).onPress();
+            var category = ((FilterCard) field("working")).categories().getFirst();
+            assertEquals(pair.getValue(), category.mode());
+            assertEquals(initial.categories().getFirst().rules(), category.rules());
+        }
+    }
+
+    @Test void iconAndFuzzyControlsRemainConnectedWithoutChangingUnrelatedRules() throws Exception {
+        var sample = CardEditorScreen.class.getDeclaredField("sample");
+        sample.setAccessible(true);
+        sample.set(screen, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE));
+        screen.init();
+        assertTrue(button(CardEditorLayout.ICON).active);
+        button(CardEditorLayout.ICON).onPress();
+        assertEquals("minecraft:stone", ((FilterCard) field("working")).categories().getFirst().iconItemId());
+        sample.set(screen, net.minecraft.world.item.ItemStack.EMPTY);
+        screen.init();
+        button(CardEditorLayout.FUZZY).onPress();
+        assertEquals(false, field("fuzzy"));
+        assertEquals(initial.categories().getFirst().rules(), ((FilterCard) field("working")).categories().getFirst().rules());
+    }
+
+    @Test void saveEmitsTheCompleteConfigurationWithThePendingName() throws Exception {
+        ((EditBox) field("name")).setValue("准备保存的分类");
+        var payload = new java.util.concurrent.atomic.AtomicReference<dev.rs2multifilter.minecraft.network.SaveCardPayload>();
+        try (var packets = mockStatic(net.neoforged.neoforge.network.PacketDistributor.class)) {
+            packets.when(() -> net.neoforged.neoforge.network.PacketDistributor.sendToServer(
+                any(dev.rs2multifilter.minecraft.network.SaveCardPayload.class)))
+                .thenAnswer(call -> { payload.set(call.getArgument(0)); return null; });
+            button(CardEditorLayout.SAVE).onPress();
+        }
+        assertNotNull(payload.get());
+        var restored = CardWireCodec.decode(payload.get().data());
+        assertEquals("准备保存的分类", restored.categories().getFirst().name());
+        assertEquals(initial.categories().getFirst().rules(), restored.categories().getFirst().rules());
+        assertEquals(field("working"), restored);
+    }
+
+    private EditorButton button(CardEditorLayout.Rect r) {
+        int x = (screen.width - CardEditorLayout.WIDTH) / 2 + r.x();
+        int y = (screen.height - CardEditorLayout.HEIGHT) / 2 + r.y();
+        return screen.children().stream().filter(c -> c instanceof EditorButton)
+            .map(EditorButton.class::cast).filter(b -> b.getX() == x && b.getY() == y).reduce((a, b) -> b).orElseThrow();
     }
 
     private Object field(String name) throws Exception {

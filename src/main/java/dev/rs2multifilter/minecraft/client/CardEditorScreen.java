@@ -30,17 +30,16 @@ import static dev.rs2multifilter.minecraft.menu.CardEditorLayout.*;
 /** Create-style compact configuration above the existing real inventory menu. */
 public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMenu> {
     private static final int W = CardEditorLayout.WIDTH, H = CardEditorLayout.HEIGHT;
-    private static final int RULE_ROWS = 5, POPUP_W = 248, POPUP_H = 142;
+    private static final int RULE_ROWS = 5, RULE_ROW_HEIGHT = 14;
     private FilterCard working;
     private int category = -1, displayedCategory = -2, attributeIndex, ruleOffset;
     private ItemStack sample = ItemStack.EMPTY, dragged = ItemStack.EMPTY;
-    private boolean fuzzy = true, rulesOpen, isError, popupMouseDown;
+    private boolean fuzzy = true, isError, ruleMouseDown;
     private EditBox name;
     private AttributeSelector selector;
     private EditorButton includeButton, excludeButton;
     private String notice = "";
     private int noticeTicks;
-    private int popupX, popupY;
     private Rect ruleArea;
     private final List<AbstractWidget> ruleWidgets = new ArrayList<>();
     private final List<AttributeOption> attributes = new ArrayList<>();
@@ -91,8 +90,6 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         excludeButton.setAccent(0xFF9A6852);
         updateAddButtons();
 
-        button(RULES, (hasCategory() ? current().rules().size() : 0) + " 条",
-            rulesPreview(), this::openRules).active = hasCategory();
         FilterCategory.Mode mode = hasCategory() ? current().mode() : FilterCategory.Mode.ANY;
         modeButton(ANY, "或", FilterCategory.Mode.ANY, mode,
             "任意：满足任一普通词条，且不匹配排除词条");
@@ -105,12 +102,10 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         fuzzyButton.setSelected(fuzzy);
         button(ICON, "图标", "将参考物品设为当前分类图标", this::useSampleAsIcon)
             .active = hasCategory() && !sample.isEmpty();
-        button(CLEAR_REFERENCE, "×", "清空幽灵参考物品，保留所有规则", this::clearReference)
-            .active = !sample.isEmpty();
-        button(CLEAR_RULES, "清", "清空当前分类的全部规则，保留分类与参考物品", this::clearRules)
+        button(CLEAR_RULES, "清空", "清空当前分类的全部规则，保留分类与参考物品", this::clearRules)
             .active = hasCategory() && !current().rules().isEmpty();
-        button(SAVE, "✓", "保存所有分类至过滤卡", this::saveCard);
-        if (rulesOpen) rebuildRulePopup();
+        button(SAVE, "保存", "保存所有分类至过滤卡", this::saveCard);
+        rebuildRulePanel();
     }
 
     private EditorButton button(Rect r, String label, String hint, Runnable action) {
@@ -130,16 +125,12 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
     private void copy(String text) {
         if (minecraft != null) {
             minecraft.keyboardHandler.setClipboard(text);
-            message("已复制完整词条", false);
+            message("已复制", false);
         }
     }
 
     private Component ruleTooltip(FilterRule.Kind kind, String label, String value, Boolean excluded) {
-        String readable = RuleClipboard.value(kind, value);
-        String detail = readable.length() <= 256 ? readable : "完整内部值较长，可右键复制";
-        return Component.literal((excluded == null ? "候选属性" : excluded ? "排除规则" : "包含规则")
-            + " · " + kind.name() + "\n" + label + "\n" + detail
-            + "\n" + (excluded == null ? "滚轮选择；右键复制完整数据" : "右键复制完整数据；右侧 × 删除"));
+        return Component.literal(String.join("\n", RuleClipboard.tooltip(kind, label, value, excluded)));
     }
 
     private void addSelected(boolean exclude) {
@@ -173,35 +164,9 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         rebuildWidgets();
     }
 
-    private void openRules() {
-        rulesOpen = true;
-        dragged = ItemStack.EMPTY;
-        rebuildRulePopup();
-    }
-
-    private String rulesPreview() {
-        StringBuilder preview = new StringBuilder("已选规则");
-        if (hasCategory()) {
-            var rules = current().rules();
-            for (int i = 0; i < Math.min(4, rules.size()); i++) {
-                var rule = rules.get(i);
-                preview.append("\n").append(rule.exclude() ? "− 排除 " : "+ 包含 ")
-                    .append(EditorText.fit(ruleDescription(rule), 150, font::width));
-            }
-            if (rules.size() > 4) preview.append("\n…");
-        }
-        return preview.append("\n点击展开；滚轮浏览；右键复制；逐条删除").toString();
-    }
-
-    private void rebuildRulePopup() {
+    private void rebuildRulePanel() {
         ruleWidgets.clear();
-        popupX = left() + W + 6 + POPUP_W <= width - 4 ? left() + W + 6
-            : Math.max(4, Math.min(left() + W - POPUP_W, width - POPUP_W - 4));
-        popupY = Math.max(4, Math.min(top() + 20, height - POPUP_H - 4));
-        ruleArea = new Rect(popupX + 8, popupY + 26, POPUP_W - 16, RULE_ROWS * 18);
-        var close = new EditorButton(popupX + POPUP_W - 25, popupY + 5, 18, 16,
-            Component.literal("×"), b -> rulesOpen = false);
-        ruleWidgets.add(close);
+        ruleArea = new Rect(left() + RULE_LIST.x(), top() + RULE_LIST.y(), RULE_LIST.width(), RULE_LIST.height());
         if (!hasCategory()) return;
         var rules = current().rules();
         ruleOffset = Math.max(0, Math.min(ruleOffset, Math.max(0, rules.size() - RULE_ROWS)));
@@ -209,24 +174,30 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
             int target = ruleOffset + row;
             FilterRule rule = rules.get(target);
             String title = ruleDescription(rule);
-            int yy = ruleArea.y() + row * 18;
-            var entry = new RuleEntryButton(ruleArea.x(), yy, 210, 17,
-                Component.literal((rule.exclude() ? "− 排除 " : "+ 包含 ") + title), b -> {},
+            int yy = ruleArea.y() + row * RULE_ROW_HEIGHT;
+            var entry = new RuleEntryButton(ruleArea.x(), yy, ruleArea.width() - 16, 13,
+                Component.literal((rule.exclude() ? "− " : "+ ") + title), b -> {},
                 RuleClipboard.describe(rule.kind(), title, rule.value(), rule.exclude()), this::copy);
-            entry.setTooltip(Tooltip.create(ruleTooltip(rule.kind(), title, rule.value(), rule.exclude())));
+            entry.setCompact(true);
+            entry.setAccent(rule.exclude() ? 0xFF9A6852 : 0xFF348C56);
             ruleWidgets.add(entry);
-            var delete = new EditorButton(popupX + 220, yy, 20, 17,
+            var delete = new EditorButton(ruleArea.x() + ruleArea.width() - 14, yy, 13, 13,
                 Component.literal("×"), b -> deleteRule(target));
-            delete.setTooltip(Tooltip.create(Component.literal("删除这一条规则")));
+            delete.setCompact(true);
             ruleWidgets.add(delete);
         }
+    }
+
+    List<Component> candidateTooltipAt(double mx, double my, int visibleEntries) {
+        if (selector == null || !selector.isMouseOver(mx, my)) return List.of();
+        return selector.hoverLines(sample.isEmpty() ? Component.literal("参考物品") : sample.getHoverName(), visibleEntries);
     }
 
     private boolean hasCategory() {
         return category >= 0 && category < working.categories().size();
     }
     private FilterCategory current() { return working.categories().get(category); }
-    private void message(String text, boolean error) { notice = text; isError = error; noticeTicks = 100; }
+    private void message(String text, boolean error) { notice = text; isError = error; noticeTicks = 40; }
     private boolean commitName() {
         if (!hasCategory()) return true;
         String changed = name.getValue().trim();
@@ -471,8 +442,8 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
     }
 
     @Override public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (rulesOpen || popupMouseDown) {
-            popupMouseDown = false;
+        if (ruleMouseDown) {
+            ruleMouseDown = false;
             for (var widget : ruleWidgets) widget.mouseReleased(mouseX, mouseY, button);
             return true;
         }
@@ -482,12 +453,8 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
     }
 
     @Override public boolean mouseClicked(double mx, double my, int button) {
-        if (rulesOpen) {
-            popupMouseDown = true;
-            if (!new Rect(popupX, popupY, POPUP_W, POPUP_H).contains(mx, my)) {
-                rulesOpen = false;
-                return true;
-            }
+        if (new Rect(left() + RULE_PANEL.x(), top() + RULE_PANEL.y(), RULE_PANEL.width(), RULE_PANEL.height()).contains(mx, my)) {
+            ruleMouseDown = true;
             for (var widget : ruleWidgets) if (widget.mouseClicked(mx, my, button)) return true;
             return true;
         }
@@ -495,18 +462,16 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
     }
 
     @Override public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
-        return rulesOpen || popupMouseDown || super.mouseDragged(mx, my, button, dx, dy);
+        return ruleMouseDown || super.mouseDragged(mx, my, button, dx, dy);
     }
 
     @Override public boolean mouseScrolled(double mx, double my, double dx, double dy) {
-        if (rulesOpen) {
-            if (ruleArea != null && ruleArea.contains(mx, my) && hasCategory() && dy != 0) {
-                int max = Math.max(0, current().rules().size() - RULE_ROWS);
-                int next = Math.max(0, Math.min(max, ruleOffset + (dy < 0 ? 1 : -1)));
-                if (next != ruleOffset) {
-                    ruleOffset = next;
-                    rebuildRulePopup();
-                }
+        if (ruleArea != null && ruleArea.contains(mx, my) && dy != 0) {
+            int max = hasCategory() ? Math.max(0, current().rules().size() - RULE_ROWS) : 0;
+            int next = Math.max(0, Math.min(max, ruleOffset + (dy < 0 ? 1 : -1)));
+            if (next != ruleOffset) {
+                ruleOffset = next;
+                rebuildRulePanel();
             }
             return true;
         }
@@ -514,10 +479,6 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
     }
 
     @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (rulesOpen) {
-            if (keyCode == 256) rulesOpen = false;
-            return true;
-        }
         if (name != null && name.isFocused() && keyCode != 256)
             return name.keyPressed(keyCode, scanCode, modifiers);
         return super.keyPressed(keyCode, scanCode, modifiers);
@@ -536,7 +497,7 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
                 if (((xx - x + yy - y) / 2 & 1) == 0)
                     g.fill(xx, yy, xx + 1, yy + 1, 0xFFB5A88D);
         EditorButton.frame(g, x, y, W, 15, 0xFFE6B95E);
-        String title = "属性过滤卡" + (hasCategory() ? " · " + (category + 1) + "/" + working.categories().size() : " · 尚无分类");
+        String title = "属性过滤卡" + (hasCategory() ? " · " + (category + 1) + "/" + working.categories().size() : "");
         g.drawCenteredString(font, title, x + W / 2, y + 4, 0xFF593A27);
         if (hasCategory()) {
             ResourceLocation icon = ResourceLocation.tryParse(current().iconItemId());
@@ -548,12 +509,13 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
             g.renderItem(stack, 0, 0);
             g.pose().popPose();
         }
-        EditorButton.frame(g, x + 1, y + 84, W - 2, 31, 0xFFC6C6C4);
+        EditorButton.frame(g, x + 1, y + 84, W - 2, CONFIG_HEIGHT - 85, 0xFFC6C6C4);
+        g.fill(x + 84, y + 92, x + 85, y + 112, 0xFF858580);
+        g.fill(x + 191, y + 92, x + 192, y + 112, 0xFF858580);
         slotFrame(g, x + REFERENCE_X, y + REFERENCE_Y);
-        String hint = noticeTicks > 0 ? notice : sample.isEmpty()
-            ? "从背包点选样本；物品不会移动" : "滚轮选择属性 · 右键复制 · " + (attributeIndex + 1) + "/" + attributes.size();
-        g.drawString(font, EditorText.fit(hint, W - 16, font::width), x + 8, y + 73,
-            noticeTicks > 0 && isError ? 0xFF9A2222 : 0xFF504B42, false);
+        if (noticeTicks > 0)
+            g.drawString(font, EditorText.fit(notice, W - 52, font::width), x + 42, y + 75,
+                isError ? 0xFF9A2222 : 0xFF504B42, false);
 
         EditorButton.frame(g, x + INVENTORY.x(), y + INVENTORY.y(), INVENTORY.width(), INVENTORY.height(), 0xFFC6C6C6);
         g.drawString(font, "物品栏", x + INVENTORY.x() + 8, y + INVENTORY.y() + 6, 0xFF484848, false);
@@ -561,14 +523,12 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
             Slot slot = menu.getSlot(i);
             slotFrame(g, x + slot.x, y + slot.y);
         }
-        // Decorative card preview, only where it fits; it has no inventory hit box.
-        if (x + W + 66 < width) {
-            g.pose().pushPose();
-            g.pose().translate(x + W + 10, y + 54, 0);
-            g.pose().scale(3, 3, 3);
-            g.renderItem(menu.editingCard(), 0, 0);
-            g.pose().popPose();
-        }
+        EditorButton.frame(g, x + RULE_PANEL.x(), y + RULE_PANEL.y(), RULE_PANEL.width(), RULE_PANEL.height(), 0xFFE4DDC8);
+        int count = hasCategory() ? current().rules().size() : 0;
+        g.drawString(font, "已选规则 " + count, x + RULE_PANEL.x() + 5, y + RULE_PANEL.y() + 6, 0xFF504B42, false);
+        if (count == 0) g.drawString(font, "尚无规则", x + RULE_LIST.x() + 5, y + RULE_LIST.y() + 4, 0xFF787369, false);
+        else g.drawString(font, (ruleOffset + 1) + "–" + Math.min(count, ruleOffset + RULE_ROWS) + "/" + count,
+            x + RULE_PANEL.x() + 5, y + RULE_PANEL.y() + 96, 0xFF777166, false);
     }
 
     private static void slotFrame(GuiGraphics g, int x, int y) {
@@ -580,29 +540,46 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
 
     @Override protected void renderLabels(GuiGraphics g, int mx, int my) {}
 
+    private java.util.List<net.minecraft.util.FormattedCharSequence> wrapTooltip(List<Component> lines) {
+        int pixels = Math.max(80, Math.min(340, width - 24));
+        return lines.stream().flatMap(line -> font.split(line, pixels).stream()).toList();
+    }
+
     @Override protected void renderTooltip(GuiGraphics g, int mx, int my) {
-        if (!rulesOpen) super.renderTooltip(g, mx, my);
+        List<Component> candidates = candidateTooltipAt(mx, my, 16);
+        if (!candidates.isEmpty()) {
+            var wrapped = wrapTooltip(candidates);
+            for (int entries = 15; wrapped.size() * 9 > height - 20 && entries >= 3; entries--)
+                wrapped = wrapTooltip(candidateTooltipAt(mx, my, entries));
+            g.renderTooltip(font, wrapped, mx, my);
+            return;
+        }
+        for (int i = 0; i < ruleWidgets.size(); i++) {
+            var widget = ruleWidgets.get(i);
+            if (!widget.isMouseOver(mx, my)) continue;
+            if ((i & 1) == 1) g.renderComponentTooltip(font, List.of(Component.literal("删除这条规则")), mx, my);
+            else if (hasCategory()) {
+                var rule = current().rules().get(ruleOffset + i / 2);
+                var lines = RuleClipboard.tooltip(rule.kind(), ruleDescription(rule), rule.value(), rule.exclude())
+                    .stream().map(Component::literal).map(Component.class::cast).toList();
+                g.renderTooltip(font, wrapTooltip(lines), mx, my);
+            }
+            return;
+        }
+        if (new Rect(left() + REFERENCE_X - 1, top() + REFERENCE_Y - 1, 18, 18).contains(mx, my)) {
+            List<Component> lines = new ArrayList<>();
+            if (!sample.isEmpty()) lines.add(sample.getHoverName());
+            lines.add(Component.literal("从背包点选样本；点击此槽清空"));
+            lines.add(Component.literal("样本不消耗物品，也不永久保存"));
+            g.renderComponentTooltip(font, lines, mx, my);
+        } else super.renderTooltip(g, mx, my);
     }
 
     @Override public void render(GuiGraphics g, int mx, int my, float tick) {
-        // A modal rule popup must not hover/click the slots or controls behind it.
-        super.render(g, rulesOpen ? -999 : mx, rulesOpen ? -999 : my, tick);
-        if (!dragged.isEmpty() && !rulesOpen) g.renderItem(dragged, mx - 8, my - 8);
-        if (rulesOpen) {
-            g.pose().pushPose();
-            g.pose().translate(0, 0, 300);
-            EditorButton.frame(g, popupX, popupY, POPUP_W, POPUP_H, 0xFFE4DDC8);
-            g.drawString(font, "已选规则 " + (hasCategory() ? current().rules().size() : 0), popupX + 8, popupY + 9, 0xFF504B42, false);
-            if (!hasCategory() || current().rules().isEmpty())
-                g.drawString(font, "尚无规则，请从参考物品添加", popupX + 12, popupY + 40, 0xFF656057, false);
-            for (var widget : ruleWidgets) widget.render(g, mx, my, tick);
-            int count = hasCategory() ? current().rules().size() : 0;
-            String footer = count == 0 ? "Esc 或点击外侧关闭" : (ruleOffset + 1) + "–" + Math.min(count, ruleOffset + RULE_ROWS)
-                + "/" + count + " · 滚轮浏览 · 右键复制";
-            if (noticeTicks > 0 && notice.startsWith("已复制")) footer = "已复制完整词条 · Esc 关闭";
-            g.drawString(font, footer, popupX + 8, popupY + 125, 0xFF656057, false);
-            g.pose().popPose();
-        } else renderTooltip(g, mx, my);
+        super.render(g, mx, my, tick);
+        for (var widget : ruleWidgets) widget.render(g, mx, my, tick);
+        if (!dragged.isEmpty()) g.renderItem(dragged, mx - 8, my - 8);
+        renderTooltip(g, mx, my);
     }
 
     @Override public boolean isPauseScreen() { return false; }
