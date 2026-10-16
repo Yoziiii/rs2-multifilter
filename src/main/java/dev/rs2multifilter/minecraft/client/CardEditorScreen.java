@@ -86,10 +86,13 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         addRenderableWidget(selector);
         includeButton = button(INCLUDE, "+", "添加普通词条：按当前过滤模式参与匹配", () -> addSelected(false));
         excludeButton = button(EXCLUDE, "+!", "添加反向词条：排除匹配该属性的物品", () -> addSelected(true));
+        includeButton.setSelected(true);
+        excludeButton.setSelected(true);
+        excludeButton.setAccent(0xFF9A6852);
         updateAddButtons();
 
         button(RULES, (hasCategory() ? current().rules().size() : 0) + " 条",
-            "查看已选规则；点击展开，可滚轮浏览、右键复制或逐条删除", this::openRules).active = hasCategory();
+            rulesPreview(), this::openRules).active = hasCategory();
         FilterCategory.Mode mode = hasCategory() ? current().mode() : FilterCategory.Mode.ANY;
         modeButton(ANY, "或", FilterCategory.Mode.ANY, mode,
             "任意：满足任一普通词条，且不匹配排除词条");
@@ -169,6 +172,20 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         rulesOpen = true;
         dragged = ItemStack.EMPTY;
         rebuildRulePopup();
+    }
+
+    private String rulesPreview() {
+        StringBuilder preview = new StringBuilder("已选规则");
+        if (hasCategory()) {
+            var rules = current().rules();
+            for (int i = 0; i < Math.min(4, rules.size()); i++) {
+                var rule = rules.get(i);
+                preview.append("\n").append(rule.exclude() ? "− 排除 " : "+ 包含 ")
+                    .append(EditorText.fit(ruleDescription(rule), 150, font::width));
+            }
+            if (rules.size() > 4) preview.append("\n…");
+        }
+        return preview.append("\n点击展开；滚轮浏览；右键复制；逐条删除").toString();
     }
 
     private void rebuildRulePopup() {
@@ -577,6 +594,7 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
             int count = hasCategory() ? current().rules().size() : 0;
             String footer = count == 0 ? "Esc 或点击外侧关闭" : (ruleOffset + 1) + "–" + Math.min(count, ruleOffset + RULE_ROWS)
                 + "/" + count + " · 滚轮浏览 · 右键复制";
+            if (noticeTicks > 0 && notice.startsWith("已复制")) footer = "已复制完整词条 · Esc 关闭";
             g.drawString(font, footer, popupX + 8, popupY + 125, 0xFF656057, false);
             g.pose().popPose();
         } else renderTooltip(g, mx, my);

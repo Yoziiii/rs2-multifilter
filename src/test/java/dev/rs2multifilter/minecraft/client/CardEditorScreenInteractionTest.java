@@ -130,6 +130,49 @@ class CardEditorScreenInteractionTest {
         assertTrue(selector.mouseScrolled(expectedX + 2, expectedY + 2, 0, -1));
     }
 
+    @Test void normalAndReverseAddButtonsKeepTheirRealRuleFlagsAndSelection() throws Exception {
+        ((EditorButton) field("includeButton")).onPress();
+        var card = (FilterCard) field("working");
+        assertEquals(10, card.categories().getFirst().rules().size());
+        assertEquals(new FilterRule(FilterRule.Kind.MOD, "minecraft", false),
+            card.categories().getFirst().rules().getLast());
+        assertEquals(0, field("attributeIndex"));
+        assertFalse(((EditorButton) field("includeButton")).active);
+        assertTrue(((EditorButton) field("excludeButton")).active);
+        ((EditorButton) field("excludeButton")).onPress();
+        card = (FilterCard) field("working");
+        assertEquals(11, card.categories().getFirst().rules().size());
+        assertEquals(new FilterRule(FilterRule.Kind.MOD, "minecraft", true),
+            card.categories().getFirst().rules().getLast());
+        verify(menu, never()).clicked(anyInt(), anyInt(), any(), any());
+    }
+
+    @Test void deletingAfterScrollingRemovesExactlyTheDisplayedRule() throws Exception {
+        invoke("openRules");
+        var area = (CardEditorLayout.Rect) field("ruleArea");
+        screen.mouseScrolled(area.x() + 1, area.y() + 1, 0, -1);
+        @SuppressWarnings("unchecked") var widgets = (List<EditorButton>) field("ruleWidgets");
+        widgets.get(2).onPress();
+        var rules = ((FilterCard) field("working")).categories().getFirst().rules();
+        assertEquals(8, rules.size());
+        assertFalse(rules.contains(initial.categories().getFirst().rules().get(1)));
+        assertTrue(rules.contains(initial.categories().getFirst().rules().getFirst()));
+        assertTrue(rules.contains(initial.categories().getFirst().rules().getLast()));
+    }
+
+    @Test void rulePopupFitsAllSupportedViewportSizes() throws Exception {
+        for (int[] viewport : new int[][]{{320, 240}, {426, 240}, {480, 270}, {640, 360}, {960, 540}}) {
+            screen.width = viewport[0];
+            screen.height = viewport[1];
+            screen.init();
+            invoke("openRules");
+            int x = (int) field("popupX"), y = (int) field("popupY");
+            assertTrue(x >= 4 && y >= 4);
+            assertTrue(x + 248 <= screen.width - 4);
+            assertTrue(y + 142 <= screen.height - 4);
+        }
+    }
+
     private Object field(String name) throws Exception {
         var field = CardEditorScreen.class.getDeclaredField(name);
         field.setAccessible(true);

@@ -8,12 +8,14 @@ import net.minecraft.network.chat.Component;
 /** Compact pixel bevels matching the filter panel, without requiring Create. */
 public class EditorButton extends Button {
     private boolean selected;
+    private int accent = 0xFF348C56;
 
     public EditorButton(int x, int y, int width, int height, Component label, OnPress press) {
         super(x, y, width, height, label, press, DEFAULT_NARRATION);
     }
 
     public void setSelected(boolean selected) { this.selected = selected; }
+    public void setAccent(int accent) { this.accent = accent; }
 
     public static void frame(GuiGraphics g, int x, int y, int w, int h, int fill) {
         g.fill(x, y, x + w, y + h, 0xFF24211F);
@@ -25,7 +27,7 @@ public class EditorButton extends Button {
     }
 
     @Override protected void renderWidget(GuiGraphics g, int mx, int my, float tick) {
-        int color = !active ? 0xFF686965 : selected ? 0xFF348C56
+        int color = !active ? 0xFF686965 : selected ? accent
             : isHoveredOrFocused() ? 0xFFAAA9A1 : 0xFF898A87;
         frame(g, getX(), getY(), getWidth(), getHeight(), color);
         var font = Minecraft.getInstance().font;
