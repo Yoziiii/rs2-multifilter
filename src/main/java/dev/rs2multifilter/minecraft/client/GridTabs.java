@@ -107,6 +107,11 @@ public final class GridTabs {
             ? new ItemStack(BuiltInRegistries.ITEM.get(key)) : new ItemStack(Items.PAPER);
     }
     /** Called after RS paints its background, BEFORE vanilla draws slot items. */
+    public static boolean isCategoryStripAt(AbstractGridScreen<?> screen, double mx, double my) {
+        int x = screen.getGuiLeft(), y = Math.max(2, screen.getGuiTop() - 23);
+        return mx >= x && mx < x + 190 && my >= y && my < y + 24;
+    }
+
     public static void renderAttachedPanels(AbstractGridScreen<?> screen, GuiGraphics g) {
         int x = screen.getGuiLeft(), y = screen.getGuiTop();
         EditorButton.frame(g, x + 197, y, 31, 82, 0xFFC6C6C6);

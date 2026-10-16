@@ -2,6 +2,7 @@ package dev.rs2multifilter.minecraft.mixin;
 
 import com.refinedmods.refinedstorage.common.grid.screen.AbstractGridScreen;
 import dev.rs2multifilter.minecraft.storage.InstalledCardSlot;
+import dev.rs2multifilter.minecraft.client.GridTabs;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -18,6 +19,12 @@ public abstract class GridSlotOutsideClickMixin {
     private void rs2mf$keepFilterClickInside(double mouseX, double mouseY,
             int guiLeft, int guiTop, int mouseButton, CallbackInfoReturnable<Boolean> cir) {
         if (!((Object)this instanceof AbstractGridScreen<?> gridScreen)) return;
+        // The attached category strip is UI, including its gaps and right clicks.
+        // Never interpret a click there as throwing the carried item outside.
+        if (GridTabs.isCategoryStripAt(gridScreen, mouseX, mouseY)) {
+            cir.setReturnValue(false);
+            return;
+        }
         for (var slot : gridScreen.getMenu().slots) {
             if (!(slot instanceof InstalledCardSlot)) continue;
             double left = gridScreen.getGuiLeft() + slot.x;

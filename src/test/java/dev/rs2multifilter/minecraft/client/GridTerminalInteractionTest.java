@@ -173,6 +173,21 @@ class GridTerminalInteractionTest {
         }
     }
 
+    @Test void categoryStripHitBoxTracksPositionAndExcludesTheNativeInventory() {
+        var screen = mock(AbstractGridScreen.class);
+        when(screen.getGuiLeft()).thenReturn(50);
+        when(screen.getGuiTop()).thenReturn(30);
+        assertTrue(GridTabs.isCategoryStripAt(screen, 50, 7));
+        assertTrue(GridTabs.isCategoryStripAt(screen, 239, 29));
+        assertFalse(GridTabs.isCategoryStripAt(screen, 240, 10));
+        assertFalse(GridTabs.isCategoryStripAt(screen, 50, 31));
+        assertFalse(GridTabs.isCategoryStripAt(screen, 70, 80));
+        when(screen.getGuiLeft()).thenReturn(100);
+        when(screen.getGuiTop()).thenReturn(60);
+        assertFalse(GridTabs.isCategoryStripAt(screen, 50, 7));
+        assertTrue(GridTabs.isCategoryStripAt(screen, 100, 37));
+    }
+
     @Test void fullInventoryKeepsAllFourCardsAndRetryCannotDuplicateThem() {
         for (int i = 0; i < 36; i++) inventory.setItem(i, new ItemStack(Items.STONE, 64));
         var slots = cardSlots();
