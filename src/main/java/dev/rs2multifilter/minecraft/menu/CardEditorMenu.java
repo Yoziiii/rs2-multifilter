@@ -16,15 +16,15 @@ import net.minecraft.world.item.ItemStack;
 
 /** Real player inventory slots plus one transient, vanilla-synchronized sample. */
 public final class CardEditorMenu extends AbstractContainerMenu {
-    public static final int WIDTH = 388;
-    public static final int HEIGHT = 273;
+    public static final int WIDTH = CardEditorLayout.WIDTH;
+    public static final int HEIGHT = CardEditorLayout.HEIGHT;
     public static final int PLAYER_SLOT_COUNT = 36;
     public static final int REFERENCE_SLOT = PLAYER_SLOT_COUNT;
-    public static final int INVENTORY_X = 11;
-    public static final int INVENTORY_Y = 137;
-    public static final int HOTBAR_Y = 195;
-    public static final int REFERENCE_X = 22;
-    public static final int REFERENCE_Y = 80;
+    public static final int INVENTORY_X = CardEditorLayout.INVENTORY_X;
+    public static final int INVENTORY_Y = CardEditorLayout.INVENTORY_Y;
+    public static final int HOTBAR_Y = CardEditorLayout.HOTBAR_Y;
+    public static final int REFERENCE_X = CardEditorLayout.REFERENCE_X;
+    public static final int REFERENCE_Y = CardEditorLayout.REFERENCE_Y;
 
     private final Inventory playerInventory;
     private final int cardInventorySlot;

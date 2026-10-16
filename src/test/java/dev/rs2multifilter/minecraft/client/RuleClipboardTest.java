@@ -60,6 +60,33 @@ class RuleClipboardTest {
         assertEquals(0, copies.get());
     }
 
+    @Test void candidateCopyIncludesTypeNameAndFullOriginalValue() {
+        String copy = RuleClipboard.describe(FilterRule.Kind.TAG, "标签为 #" + TAG, TAG, null);
+        assertTrue(copy.contains("词条类型：TAG"));
+        assertTrue(copy.contains("显示名称：标签为 #" + TAG));
+        assertTrue(copy.contains("完整内部值：" + TAG));
+        assertTrue(copy.contains("可读值：#" + TAG));
+        assertTrue(copy.contains("候选词条（未添加）"));
+        assertFalse(copy.contains("…"));
+    }
+
+    @Test void selectedCopyDistinguishesIncludeAndExcludeAndKeepsOpaqueData() {
+        String raw = "exact:" + "abcdef".repeat(600);
+        for (boolean exclude : new boolean[]{false, true}) {
+            String copy = RuleClipboard.describe(FilterRule.Kind.EXACT_ITEM, "完整物品名称", raw, exclude);
+            assertTrue(copy.contains("规则方向：" + (exclude ? "排除" : "包含")));
+            assertTrue(copy.endsWith(raw));
+        }
+    }
+
+    @Test void createCopyRetainsTheSerializedDataAlongWithTheReadableTag() {
+        String raw = encode("{attribute:{type:\"create:in_tag\",value:\"" + TAG + "\"}}");
+        String copy = RuleClipboard.describe(FilterRule.Kind.CREATE_ATTRIBUTE, "标签属性", raw, true);
+        assertTrue(copy.contains("完整内部值：" + raw));
+        assertTrue(copy.contains("可读值：#" + TAG));
+        assertTrue(copy.contains("规则方向：排除"));
+    }
+
     private static String encode(String snbt) {
         return "create:" + HexFormat.of().formatHex(snbt.getBytes(StandardCharsets.UTF_8));
     }

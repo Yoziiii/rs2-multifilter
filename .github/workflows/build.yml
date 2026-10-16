@@ -2,7 +2,7 @@ name: NeoForge 1.21.1 Build
 on:
   workflow_dispatch:
   push:
-    branches: [main, codex/create-menu-phase1, codex/interaction-phase2]
+    branches: [main, codex/create-menu-phase1, codex/interaction-phase2, codex/create-ui-phase3]
 
 concurrency:
   group: rs2-multifilter-build-${{ github.ref }}
