@@ -22,9 +22,10 @@ public final class FilterCardItem extends Item {
         if (hand == InteractionHand.MAIN_HAND && player instanceof ServerPlayer serverPlayer) {
             ItemStack card = player.getMainHandItem();
             int cardSlot = player.getInventory().selected;
-            String initial = CardWireCodec.encode(CardComponents.read(card));
+            var prepared = CardComponents.read(card).forEditing();
+            String initial = CardWireCodec.encode(prepared);
             serverPlayer.openMenu(new SimpleMenuProvider(
-                (id, inventory, owner) -> new CardEditorMenu(id, inventory, cardSlot, card),
+                (id, inventory, owner) -> new CardEditorMenu(id, inventory, cardSlot, card, prepared),
                 Component.literal("过滤升级")), buffer -> {
                     buffer.writeVarInt(cardSlot);
                     buffer.writeUtf(initial, CardWireCodec.MAX_ENCODED_CHARS);

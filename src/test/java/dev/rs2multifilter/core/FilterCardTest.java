@@ -11,7 +11,7 @@ class FilterCardTest {
         assertTrue(blank.categories().isEmpty());
         var draft = blank.forEditing();
         assertEquals(1, draft.categories().size());
-        assertEquals("默认分类", draft.categories().getFirst().name());
+        assertEquals("分类1", draft.categories().getFirst().name());
         assertEquals(draft, CardWireCodec.decode(CardWireCodec.encode(draft)));
         assertSame(draft, draft.forEditing());
         var custom = blank.withCategory(new FilterCategory("已有", "minecraft:stone", List.of()));

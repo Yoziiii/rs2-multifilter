@@ -95,15 +95,16 @@ class CardEditorScreenInteractionTest {
     }
 
     @Test void emptyCardGetsExactlyOneEditableDefaultWithoutSilentlySaving() throws Exception {
-        when(menu.initialCard()).thenReturn(FilterCard.blank());
+        var prepared = FilterCard.blank().forEditing();
+        when(menu.initialCard()).thenReturn(prepared);
         var opened = new CardEditorScreen(menu, new Inventory(mock(Player.class)), Component.literal("过滤升级"));
         var working = CardEditorScreen.class.getDeclaredField("working");
         working.setAccessible(true);
         FilterCard draft = (FilterCard) working.get(opened);
         assertEquals(1, draft.categories().size());
-        assertEquals("默认分类", draft.categories().getFirst().name());
+        assertEquals("分类1", draft.categories().getFirst().name());
         assertEquals(draft, draft.forEditing().forEditing());
-        assertTrue(menu.initialCard().categories().isEmpty(), "Opening does not silently save the draft");
+        assertSame(prepared, draft, "Client must use the server snapshot without creating categories");
     }
 
     @Test void titleRenderingUsesTheNewNameWithoutAShadow() {
@@ -131,7 +132,7 @@ class CardEditorScreenInteractionTest {
         screen.init();
         assertTrue(((FilterCard) field("working")).categories().isEmpty());
         var savedEmpty = CardWireCodec.decode(CardWireCodec.encode((FilterCard) field("working")));
-        when(menu.initialCard()).thenReturn(savedEmpty);
+        when(menu.initialCard()).thenReturn(savedEmpty.forEditing());
         var reopened = new CardEditorScreen(menu, new Inventory(mock(Player.class)), Component.literal("过滤升级"));
         var working = CardEditorScreen.class.getDeclaredField("working");
         working.setAccessible(true);

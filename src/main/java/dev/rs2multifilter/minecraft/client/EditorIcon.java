@@ -25,6 +25,17 @@ public enum EditorIcon {
     EditorIcon(String... pixels) { this.pixels = pixels; }
 
     public void render(GuiGraphics g, int centerX, int centerY, int color) {
+        String nativeSprite = switch (this) {
+            case CONFIRM -> "set";
+            case CLEAR -> "reset";
+            case FUZZY -> "widget/side_button/fuzzy_mode/on";
+            case EXACT -> "widget/side_button/fuzzy_mode/off";
+            default -> null;
+        };
+        if (nativeSprite != null) {
+            g.blitSprite(RsUi.id(nativeSprite), centerX - 8, centerY - 8, 16, 16);
+            return;
+        }
         int w = 0;
         for (String row : pixels) w = Math.max(w, row.length());
         int x = centerX - w / 2, y = centerY - pixels.length / 2;

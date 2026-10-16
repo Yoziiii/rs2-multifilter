@@ -119,6 +119,9 @@ class GridTerminalInteractionTest {
         field.set(null, preferences);
         var screen = mock(AbstractGridScreen.class);
         when(screen.getMenu()).thenReturn(menu);
+        when(screen.getExclusionZones()).thenReturn(new java.util.ArrayList<>());
+        when(screen.getXSize()).thenReturn(193);
+        screen.width = 320;
         when(screen.getGuiLeft()).thenReturn(50);
         when(screen.getGuiTop()).thenReturn(30);
         var init = mock(ScreenEvent.Init.Post.class);
@@ -126,19 +129,33 @@ class GridTerminalInteractionTest {
         var closing = mock(ScreenEvent.Closing.class);
         when(closing.getScreen()).thenReturn(screen);
         try (var client = mockStatic(Minecraft.class)) {
-            client.when(Minecraft::getInstance).thenReturn(mock(Minecraft.class));
+            var minecraft = mock(Minecraft.class);
+            var font = mock(net.minecraft.client.gui.Font.class);
+            when(font.width(anyString())).thenAnswer(call -> call.<String>getArgument(0).length() * 6);
+            var fontField = Minecraft.class.getDeclaredField("font");
+            fontField.setAccessible(true);
+            fontField.set(minecraft, font);
+            client.when(Minecraft::getInstance).thenReturn(minecraft);
             GridTabs.onScreenInit(init);
             var widgets = org.mockito.ArgumentCaptor.forClass(net.minecraft.client.gui.components.events.GuiEventListener.class);
-            verify(init, times(5)).addListener(widgets.capture());
-            ((EditorButton) widgets.getAllValues().get(2)).onPress();
+            verify(init, times(8)).addListener(widgets.capture());
+            assertEquals(3, widgets.getAllValues().stream().map(EditorButton.class::cast).filter(b -> b.visible).count());
+            assertFalse(((EditorButton) widgets.getAllValues().get(6)).visible);
+            assertFalse(((EditorButton) widgets.getAllValues().get(7)).visible);
+            verify(screen).addSideButton(any(RememberCategoryButton.class));
+            ((EditorButton) widgets.getAllValues().get(1)).onPress();
             assertVisible(Items.DIRT);
             var resize = mock(ScreenEvent.Init.Post.class);
             when(resize.getScreen()).thenReturn(screen);
             GridTabs.onScreenInit(resize);
             var resizedWidgets = org.mockito.ArgumentCaptor.forClass(net.minecraft.client.gui.components.events.GuiEventListener.class);
-            verify(resize, times(5)).addListener(resizedWidgets.capture());
+            verify(resize, times(8)).addListener(resizedWidgets.capture());
             ((EditorButton) resizedWidgets.getAllValues().get(2)).onPress();
             assertVisible(Items.STONE);
+            ((EditorButton) resizedWidgets.getAllValues().get(0)).onPress();
+            assertVisible(Items.DIRT, Items.STONE);
+            assertEquals(2, ClientCardState.card(menu.containerId).categories().size());
+            ((EditorButton) resizedWidgets.getAllValues().get(2)).onPress();
             GridTabs.onScreenClosing(closing);
             assertEquals(1, new GridPreferences(settingsDirectory.resolve("settings.properties")).restore("unknown", card));
             assertFalse(ClientCardState.hasSync(menu.containerId));
@@ -148,16 +165,63 @@ class GridTerminalInteractionTest {
         }
     }
 
+    @Test void pagingChangesOnlyVisibleTabsAndClickingALaterPageUsesItsOriginalCategoryIndex() throws Exception {
+        loadResources(Items.DIRT, Items.STONE);
+        var categories = java.util.stream.IntStream.range(0, 12).mapToObj(i -> new FilterCategory("C" + i,
+            "minecraft:paper", List.of(new FilterRule(FilterRule.Kind.ITEM, i % 2 == 0 ? "minecraft:dirt" : "minecraft:stone", false)))).toList();
+        var card = new FilterCard(FilterCard.VERSION, categories);
+        for (int i = 0; i < 4; i++) ClientCardState.update(menu.containerId, i, i == 0 ? CardWireCodec.encode(card) : "");
+        var preferenceField = GridTabs.class.getDeclaredField("preferences");
+        preferenceField.setAccessible(true);
+        Object before = preferenceField.get(null);
+        preferenceField.set(null, new GridPreferences(settingsDirectory.resolve("paging.properties")));
+        var screen = mock(AbstractGridScreen.class);
+        when(screen.getMenu()).thenReturn(menu);
+        when(screen.getGuiLeft()).thenReturn(50);
+        when(screen.getGuiTop()).thenReturn(30);
+        when(screen.getXSize()).thenReturn(193);
+        when(screen.getExclusionZones()).thenReturn(new java.util.ArrayList<>());
+        screen.width = 320;
+        var init = mock(ScreenEvent.Init.Post.class);
+        when(init.getScreen()).thenReturn(screen);
+        var closing = mock(ScreenEvent.Closing.class);
+        when(closing.getScreen()).thenReturn(screen);
+        try (var client = mockStatic(Minecraft.class)) {
+            var minecraft = mock(Minecraft.class);
+            var font = mock(net.minecraft.client.gui.Font.class);
+            when(font.width(anyString())).thenAnswer(call -> call.<String>getArgument(0).length() * 6);
+            var fontField = Minecraft.class.getDeclaredField("font");
+            fontField.setAccessible(true); fontField.set(minecraft, font);
+            client.when(Minecraft::getInstance).thenReturn(minecraft);
+            GridTabs.onScreenInit(init);
+            var captured = org.mockito.ArgumentCaptor.forClass(net.minecraft.client.gui.components.events.GuiEventListener.class);
+            verify(init, times(8)).addListener(captured.capture());
+            var buttons = captured.getAllValues().stream().map(EditorButton.class::cast).toList();
+            assertTrue(buttons.get(7).visible);
+            buttons.get(7).onPress();
+            assertVisible(Items.DIRT, Items.STONE);
+            assertEquals("全部", buttons.get(0).getMessage().getString());
+            assertEquals("C3", buttons.get(1).getMessage().getString());
+            buttons.get(1).onPress();
+            assertVisible(Items.STONE);
+            buttons.get(7).onPress();
+            assertVisible(Items.STONE);
+            buttons.get(0).onPress();
+            assertVisible(Items.DIRT, Items.STONE);
+            assertEquals(card, ClientCardState.card(menu.containerId));
+        } finally {
+            GridTabs.onScreenClosing(closing);
+            preferenceField.set(null, before);
+        }
+    }
+
     @Test void attachedSlotsDrawOpaqueGrayAndMatchTheNativeBackgroundHook() throws Exception {
         var screen = mock(AbstractGridScreen.class);
         when(screen.getGuiLeft()).thenReturn(50);
         when(screen.getGuiTop()).thenReturn(30);
         var graphics = mock(GuiGraphics.class);
         GridTabs.renderAttachedPanels(screen, graphics);
-        for (int i = 0; i < 4; i++) {
-            int x = 254, y = 36 + i * 18;
-            verify(graphics).fill(x, y, x + 16, y + 16, 0xFF8B8B8B);
-        }
+        verify(graphics).blit(RsUi.FILTER, 247, 30, 180, 0, 30, 82);
         var target = Class.forName("com.refinedmods.refinedstorage.common.support.stretching.AbstractStretchingScreen");
         assertEquals(void.class, target.getDeclaredMethod("renderBg", GuiGraphics.class,
             float.class, int.class, int.class).getReturnType());
@@ -179,7 +243,7 @@ class GridTerminalInteractionTest {
         when(screen.getGuiTop()).thenReturn(30);
         assertTrue(GridTabs.isCategoryStripAt(screen, 50, 7));
         assertTrue(GridTabs.isCategoryStripAt(screen, 239, 29));
-        assertFalse(GridTabs.isCategoryStripAt(screen, 240, 10));
+        assertFalse(GridTabs.isCategoryStripAt(screen, 243, 10));
         assertFalse(GridTabs.isCategoryStripAt(screen, 50, 31));
         assertFalse(GridTabs.isCategoryStripAt(screen, 70, 80));
         when(screen.getGuiLeft()).thenReturn(100);

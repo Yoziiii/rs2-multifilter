@@ -53,6 +53,7 @@ public record SwapInstalledCardPayload(int menuId, int slot) implements CustomPa
 
     public static String cardData(ItemStack installed) {
         if (installed.isEmpty()) return "";
-        return CardWireCodec.encode(CardComponents.read(installed));
+        // Server-prepared view only: keep blank items usable by the copy recipe.
+        return CardWireCodec.encode(CardComponents.read(installed).forEditing());
     }
 }

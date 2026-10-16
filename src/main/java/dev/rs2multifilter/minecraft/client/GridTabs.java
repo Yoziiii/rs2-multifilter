@@ -19,6 +19,8 @@ import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.ArrayList;
+import net.minecraft.client.renderer.Rect2i;
 
 /** Native-sized gray category strip. Actual cards are rendered by the real menu. */
 @EventBusSubscriber(modid = MultiFilterMod.ID, value = Dist.CLIENT)
@@ -50,8 +52,6 @@ public final class GridTabs {
     }
     @SubscribeEvent public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (!(event.getScreen() instanceof AbstractGridScreen<?> screen)) return;
-        // Resize must reuse the session, rather than capturing our category
-        // predicate as the native search filter and stacking both filters.
         TabState old = STATES.get(screen);
         GridCategoryState selection = old == null ? new GridCategoryState(preferences(), scope()) : old.selection;
         int menuId = screen.getMenu().containerId;
@@ -59,47 +59,74 @@ public final class GridTabs {
         GridFilterSession session = old == null ? GridFilterSession.attach(screen.getMenu(), selection.card()) : old.session;
         session.updateCard(selection.card());
         session.select(selection.selected());
-        int x = screen.getGuiLeft(), y = Math.max(2, screen.getGuiTop() - 23);
+        int x = screen.getGuiLeft() + 4, y = Math.max(2, screen.getGuiTop() - 23) + 3;
+        int width = barWidth(screen) - 8;
+        var font = Minecraft.getInstance().font;
+        CategoryNavigation[] navigation = {new CategoryNavigation(selection.card().categories().stream()
+            .map(c -> c.name()).toList(), font::width, width)};
+        FilterCard[] layoutCard = {selection.card()};
+        int[] page = {navigation[0].pageFor(selection.selected())};
         Runnable[] refresh = {() -> {}};
-        Runnable apply = () -> { session.select(selection.selected()); refresh[0].run(); };
-        var previous = new EditorButton(x + 4, y + 3, 16, 18, Component.literal("上一个分类"), b -> {
-            selection.cycle(-1); apply.run();
-        });
+        var tabs = new ArrayList<TabButton>();
+        for (int i = 0; i < 6; i++) {
+            var tab = new TabButton(x, y, b -> {
+                selection.choose(((TabButton)b).category);
+                session.select(selection.selected());
+                refresh[0].run();
+            });
+            tabs.add(tab);
+            event.addListener(tab);
+        }
+        var previous = new EditorButton(x + navigation[0].previousX(), y, 16, 18,
+            Component.literal("上一页分类"), b -> { page[0] = navigation[0].clamp(page[0] - 1); refresh[0].run(); });
         previous.setIcon(EditorIcon.PREVIOUS);
-        previous.setTooltip(Tooltip.create(Component.literal("上一个分类")));
-        var category = new CategoryButton(x + 23, y + 3, b -> { selection.cycle(1); apply.run(); });
-        var next = new EditorButton(x + 126, y + 3, 16, 18, Component.literal("下一个分类"), b -> {
-            selection.cycle(1); apply.run();
-        });
+        var next = new EditorButton(x + navigation[0].nextX(), y, 16, 18,
+            Component.literal("下一页分类"), b -> { page[0] = navigation[0].clamp(page[0] + 1); refresh[0].run(); });
         next.setIcon(EditorIcon.NEXT);
-        next.setTooltip(Tooltip.create(Component.literal("下一个分类")));
-        var all = new EditorButton(x + 145, y + 3, 18, 18, Component.literal("全部物品"), b -> {
-            selection.choose(-1); apply.run();
-        });
-        all.setIcon(EditorIcon.GRID);
-        all.setTooltip(Tooltip.create(Component.literal("全部物品：保留终端原有搜索与显示设置")));
-        var remember = new EditorButton(x + 167, y + 3, 18, 18, Component.literal("记住分类"), b -> {
-            selection.toggleRemember(); refresh[0].run();
-        });
-        remember.setIcon(EditorIcon.PIN);
-        remember.setAccent(0xFF547E91);
+        event.addListener(previous);
+        event.addListener(next);
         refresh[0] = () -> {
             FilterCard card = selection.card();
-            int index = selection.selected();
-            all.setSelected(index < 0);
-            category.active = previous.active = next.active = !card.categories().isEmpty();
-            String title = index < 0 ? "全部物品" : card.categories().get(index).name();
-            category.setMessage(Component.literal(title));
-            category.icon = index < 0 ? new ItemStack(Items.PAPER) : iconFor(card.categories().get(index).iconItemId());
-            category.setTooltip(Tooltip.create(Component.literal(title + (index < 0 ? "" : " · " + (index + 1) + "/" + card.categories().size())
-                + "\n点击切换至下一个分类；编辑分类请右键打开过滤升级")));
-            remember.setSelected(selection.remembersCategory());
-            remember.setTooltip(Tooltip.create(Component.literal("记住上一次分类：" + (selection.remembersCategory() ? "开启" : "关闭")
-                + "\n开启：重新打开终端时恢复同一配置的分类\n关闭：重新打开时显示全部物品")));
+            if (!layoutCard[0].equals(card)) {
+                navigation[0] = new CategoryNavigation(card.categories().stream().map(c -> c.name()).toList(), font::width, width);
+                page[0] = navigation[0].pageFor(selection.selected());
+                layoutCard[0] = card;
+            }
+            page[0] = navigation[0].clamp(page[0]);
+            var shown = navigation[0].tabs(page[0]);
+            for (int i = 0; i < tabs.size(); i++) {
+                var button = tabs.get(i);
+                button.visible = i < shown.size();
+                if (!button.visible) continue;
+                var tab = shown.get(i);
+                button.category = tab.category();
+                button.chosen = tab.category() == selection.selected();
+                button.setX(x + tab.x());
+                button.setWidth(tab.width());
+                String title = tab.category() < 0 ? "全部" : card.categories().get(tab.category()).name();
+                button.setMessage(Component.literal(title));
+                button.icon = tab.category() < 0 ? ItemStack.EMPTY : iconFor(card.categories().get(tab.category()).iconItemId());
+                button.setTooltip(Tooltip.create(Component.literal(tab.category() < 0
+                    ? "全部物品：保留终端原有搜索与显示设置"
+                    : title + " · " + (tab.category() + 1) + "/" + card.categories().size())));
+            }
+            previous.visible = next.visible = navigation[0].paginated();
+            previous.active = page[0] > 0;
+            next.active = page[0] + 1 < navigation[0].count();
+            String pages = (page[0] + 1) + "/" + navigation[0].count();
+            previous.setTooltip(Tooltip.create(Component.literal("上一页分类 · " + pages)));
+            next.setTooltip(Tooltip.create(Component.literal("下一页分类 · " + pages)));
         };
-        for (var button : java.util.List.of(previous, category, next, all, remember)) event.addListener(button);
+        screen.addSideButton(new RememberCategoryButton(selection));
+        screen.getExclusionZones().add(new Rect2i(screen.getGuiLeft(), y - 3, barWidth(screen), 24));
+        screen.getExclusionZones().add(new Rect2i(screen.getGuiLeft() + 197, screen.getGuiTop(), 30, 82));
         STATES.put(screen, new TabState(session, selection, refresh[0]));
         refresh[0].run();
+    }
+
+    private static int barWidth(AbstractGridScreen<?> screen) {
+        int nativeWidth = screen.getXSize() > 0 ? screen.getXSize() : 193;
+        return screen.width > 0 ? Math.min(nativeWidth, Math.max(120, screen.width - screen.getGuiLeft() - 2)) : nativeWidth;
     }
     private static ItemStack iconFor(String id) {
         ResourceLocation key = ResourceLocation.tryParse(id);
@@ -109,20 +136,15 @@ public final class GridTabs {
     /** Called after RS paints its background, BEFORE vanilla draws slot items. */
     public static boolean isCategoryStripAt(AbstractGridScreen<?> screen, double mx, double my) {
         int x = screen.getGuiLeft(), y = Math.max(2, screen.getGuiTop() - 23);
-        return mx >= x && mx < x + 190 && my >= y && my < y + 24;
+        return mx >= x && mx < x + barWidth(screen) && my >= y && my < y + 24;
     }
 
     public static void renderAttachedPanels(AbstractGridScreen<?> screen, GuiGraphics g) {
         int x = screen.getGuiLeft(), y = screen.getGuiTop();
-        EditorButton.frame(g, x + 197, y, 31, 82, 0xFFC6C6C6);
-        for (int slot = 0; slot < 4; slot++) {
-            int sx = x + 204, sy = y + 6 + slot * 18;
-            g.fill(sx - 1, sy - 1, sx + 17, sy + 17, 0xFFFFFFFF);
-            g.fill(sx - 1, sy - 1, sx + 17, sy, 0xFF373737);
-            g.fill(sx - 1, sy - 1, sx, sy + 17, 0xFF373737);
-            g.fill(sx, sy, sx + 16, sy + 16, 0xFF8B8B8B);
-        }
-        EditorButton.frame(g, x, Math.max(2, y - 23), 190, 24, 0xFFC6C6C6);
+        // The unmodified RS upgrade panel is exactly 30x82 at UV 180,0.
+        // Its 4 opaque slots align with the existing menu at 204,6 + n*18.
+        g.blit(RsUi.FILTER, x + 197, y, 180, 0, 30, 82);
+        RsUi.panel(g, x, Math.max(2, y - 23), barWidth(screen), 24);
     }
     @SubscribeEvent public static void onScreenRender(ScreenEvent.Render.Post event) {
         if (!(event.getScreen() instanceof AbstractGridScreen<?> screen)) return;
@@ -137,15 +159,23 @@ public final class GridTabs {
             state.refresh.run();
         }
     }
-    private static final class CategoryButton extends EditorButton {
-        ItemStack icon = new ItemStack(Items.PAPER);
-        CategoryButton(int x, int y, OnPress press) { super(x, y, 100, 18, Component.literal("全部物品"), press); }
+    private static final class TabButton extends EditorButton {
+        ItemStack icon = ItemStack.EMPTY;
+        int category = -1;
+        boolean chosen;
+        TabButton(int x, int y, OnPress press) { super(x, y, 34, 18, Component.literal("全部"), press); }
         @Override protected void renderWidget(GuiGraphics g, int mx, int my, float tick) {
-            frame(g, getX(), getY(), getWidth(), getHeight(), isHoveredOrFocused() ? 0xFFE0E0DA : 0xFFD2D2CC);
-            g.renderItem(icon, getX() + 2, getY() + 1);
+            RsUi.panel(g, getX(), getY(), getWidth(), getHeight());
+            if (chosen || isHoveredOrFocused()) g.fill(getX() + 4, getY() + 4,
+                getX() + getWidth() - 4, getY() + getHeight() - 4, chosen ? 0xFFDAEBF0 : 0xFFE3E3DF);
+            if (chosen) g.fill(getX() + 4, getY() + getHeight() - 3, getX() + getWidth() - 4,
+                getY() + getHeight() - 2, 0xFF3B8198);
+            boolean hasIcon = !icon.isEmpty();
+            if (hasIcon) g.renderItem(icon, getX() + 3, getY() + 1);
             var font = Minecraft.getInstance().font;
-            String text = EditorText.fit(getMessage().getString(), getWidth() - 24, font::width);
-            g.drawString(font, text, getX() + 21, getY() + 5, active ? 0xFF404648 : 0xFF858580, false);
+            String text = EditorText.fit(getMessage().getString(), getWidth() - (hasIcon ? 24 : 8), font::width);
+            int textX = hasIcon ? getX() + 21 : getX() + (getWidth() - font.width(text)) / 2;
+            g.drawString(font, text, textX, getY() + 5, chosen ? 0xFF245B70 : 0xFF404648, false);
         }
     }
 }

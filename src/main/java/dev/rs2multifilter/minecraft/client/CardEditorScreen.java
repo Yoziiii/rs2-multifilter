@@ -50,7 +50,7 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         super(menu, inventory, title);
         imageWidth = W;
         imageHeight = H;
-        working = menu.initialCard().forEditing();
+        working = menu.initialCard();
         if (!working.categories().isEmpty()) category = 0;
     }
 
@@ -514,21 +514,18 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
 
     @Override protected void renderBg(GuiGraphics g, float tick, int mx, int my) {
         int x = left(), y = top();
-        EditorButton.frame(g, x, y, W, CONFIG_HEIGHT, 0xFFC7B99A);
-        for (int yy = y + 15; yy < y + 84; yy += 2)
-            for (int xx = x + 3; xx < x + W - 3; xx += 2)
-                if (((xx - x + yy - y) / 2 & 1) == 0)
-                    g.fill(xx, yy, xx + 1, yy + 1, 0xFFB5A88D);
-        EditorButton.frame(g, x, y, W, 15, 0xFFE6B95E);
+        RsUi.panel(g, x, y, W, CONFIG_HEIGHT);
+        // RS gray surface throughout; hierarchy comes from native frames.
+        g.fill(x + 4, y + 4, x + W - 4, y + 16, 0xFFD5D5D0);
         String title = "过滤升级";
-        g.drawString(font, title, x + (W - font.width(title)) / 2, y + 4, 0xFF593A27, false);
+        g.drawString(font, title, x + (W - font.width(title)) / 2, y + 4, 0xFF404040, false);
         // One continuous RS-style category strip instead of separate dark buttons.
-        EditorButton.frame(g, x + 5, y + 18, W - 10, 24, 0xFFC6C6C6);
+        RsUi.panel(g, x + 5, y + 18, W - 10, 24);
         g.fill(x + NAME.x(), y + NAME.y(), x + NAME.x() + NAME.width(), y + NAME.y() + NAME.height(), 0xFFF0F0EA);
         g.fill(x + NAME.x(), y + NAME.y(), x + NAME.x() + NAME.width(), y + NAME.y() + 1, 0xFF777B7B);
         if (hasCategory()) {
             String position = (category + 1) + "/" + working.categories().size();
-            g.drawString(font, position, x + W - 8 - font.width(position), y + 4, 0xFF70532E, false);
+            g.drawString(font, position, x + W - 8 - font.width(position), y + 4, 0xFF606060, false);
         }
         if (hasCategory()) {
             ResourceLocation icon = ResourceLocation.tryParse(current().iconItemId());
@@ -540,7 +537,7 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
             g.renderItem(stack, 0, 0);
             g.pose().popPose();
         }
-        EditorButton.frame(g, x + 1, y + 84, W - 2, CONFIG_HEIGHT - 85, 0xFFC6C6C4);
+        RsUi.panel(g, x + 1, y + 84, W - 2, CONFIG_HEIGHT - 85);
         g.fill(x + 84, y + 92, x + 85, y + 112, 0xFF858580);
         g.fill(x + 246, y + 92, x + 247, y + 112, 0xFF858580);
         slotFrame(g, x + REFERENCE_X, y + REFERENCE_Y);
@@ -548,13 +545,13 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
             g.drawString(font, EditorText.fit(notice, W - 52, font::width), x + 42, y + 75,
                 isError ? 0xFF9A2222 : 0xFF504B42, false);
 
-        EditorButton.frame(g, x + INVENTORY.x(), y + INVENTORY.y(), INVENTORY.width(), INVENTORY.height(), 0xFFC6C6C6);
+        RsUi.panel(g, x + INVENTORY.x(), y + INVENTORY.y(), INVENTORY.width(), INVENTORY.height());
         g.drawString(font, "物品栏", x + INVENTORY.x() + 8, y + INVENTORY.y() + 6, 0xFF484848, false);
         for (int i = 0; i < CardEditorMenu.PLAYER_SLOT_COUNT; i++) {
             Slot slot = menu.getSlot(i);
             slotFrame(g, x + slot.x, y + slot.y);
         }
-        EditorButton.frame(g, x + RULE_PANEL.x(), y + RULE_PANEL.y(), RULE_PANEL.width(), RULE_PANEL.height(), 0xFFE4DDC8);
+        RsUi.panel(g, x + RULE_PANEL.x(), y + RULE_PANEL.y(), RULE_PANEL.width(), RULE_PANEL.height());
         int count = hasCategory() ? current().rules().size() : 0;
         g.drawString(font, "已选规则 " + count, x + RULE_PANEL.x() + 5, y + RULE_PANEL.y() + 6, 0xFF504B42, false);
         if (count == 0) g.drawString(font, "尚无规则", x + RULE_LIST.x() + 5, y + RULE_LIST.y() + 4, 0xFF787369, false);
@@ -563,10 +560,7 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
     }
 
     private static void slotFrame(GuiGraphics g, int x, int y) {
-        g.fill(x - 1, y - 1, x + 17, y + 17, 0xFFF3F1E9);
-        g.fill(x - 1, y - 1, x + 17, y, 0xFF4A4944);
-        g.fill(x - 1, y - 1, x, y + 17, 0xFF4A4944);
-        g.fill(x, y, x + 16, y + 16, 0xFF8B8B8B);
+        RsUi.slot(g, x, y);
     }
 
     @Override protected void renderLabels(GuiGraphics g, int mx, int my) {}

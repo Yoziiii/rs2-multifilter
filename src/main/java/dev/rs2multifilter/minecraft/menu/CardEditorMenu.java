@@ -39,7 +39,11 @@ public final class CardEditorMenu extends AbstractContainerMenu {
 
     public CardEditorMenu(int id, Inventory inventory, int cardInventorySlot, ItemStack card) {
         this(MultiFilterMod.CARD_EDITOR_MENU.get(), id, inventory, cardInventorySlot,
-            card, CardComponents.read(card));
+            card, CardComponents.read(card).forEditing());
+    }
+
+    public CardEditorMenu(int id, Inventory inventory, int cardInventorySlot, ItemStack card, FilterCard prepared) {
+        this(MultiFilterMod.CARD_EDITOR_MENU.get(), id, inventory, cardInventorySlot, card, prepared);
     }
 
     CardEditorMenu(MenuType<?> type, int id, Inventory inventory, int cardInventorySlot,
