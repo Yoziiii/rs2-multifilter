@@ -54,10 +54,13 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         if (!working.categories().isEmpty()) category = 0;
     }
 
-    /** Marker for the narrow name-text rendering correction; native editing is unchanged. */
+    /** Keep native editing and rendering, changing text shadow only for this field. */
     public static final class NameField extends EditBox {
         public NameField(net.minecraft.client.gui.Font font, int x, int y, int w, int h, Component label) {
             super(font, x, y, w, h, label);
+        }
+        @Override public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float tick) {
+            super.renderWidget(new NameFieldGraphics(graphics), mouseX, mouseY, tick);
         }
         public static int drawPlain(net.minecraft.client.gui.GuiGraphics g, net.minecraft.client.gui.Font font,
                                     net.minecraft.util.FormattedCharSequence text, int x, int y, int color) {

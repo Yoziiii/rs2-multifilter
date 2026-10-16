@@ -72,6 +72,25 @@ jobs:
           fi
           echo "NeoForge server failed to reach Done."
           exit 1
+      - name: NeoForge client startup and EditBox smoke test
+        run: |
+          set +e
+          ALSOFT_DRIVERS=null timeout 240s xvfb-run -a -s '-screen 0 1280x720x24' gradle runClient -PclientSmoke=true --console=plain > client-smoke.log 2>&1
+          CLIENT_EXIT=$?
+          set -e
+          tail -n 100 client-smoke.log
+          test "$CLIENT_EXIT" = "0"
+          grep -Fq 'RS2MF_CLIENT_SMOKE_TITLE_READY_EDITBOX_OK' client-smoke.log
+          if grep -E 'Critical injection failure|Mixin apply.*failed|Failed to create mod instance' client-smoke.log; then
+            exit 1
+          fi
+      - name: Upload client startup log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-startup-log
+          path: client-smoke.log
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: rs2multifilter-jar

@@ -49,3 +49,12 @@ processResources {
 test {
     useJUnitPlatform()
 }
+
+// Explicit CI-only probe. Its classes are not part of the production JAR.
+if (providers.gradleProperty('clientSmoke').getOrElse('false') == 'true') {
+    sourceSets.create('clientSmoke') {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+    neoForge.mods.rs2multifilter.sourceSet(sourceSets.clientSmoke)
+}
