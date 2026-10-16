@@ -121,13 +121,11 @@ class CardEditorScreenInteractionTest {
         verify(g, never()).blit(eq(RsUi.FILTER), eq(left + 1), eq(top + 84), eq(4), eq(4), eq(0f), eq(0f), eq(4), eq(4), eq(256), eq(256));
     }
 
-    @Test void nameUsesNativeEditingAndPlainTextPreservesTheCursorWidthContract() throws Exception {
-        assertInstanceOf(CardEditorScreen.NameField.class, field("name"));
-        var text = net.minecraft.util.FormattedCharSequence.forward("分类名称", net.minecraft.network.chat.Style.EMPTY);
-        var g = mock(net.minecraft.client.gui.GuiGraphics.class);
-        when(g.drawString(font, text, 10, 20, 0x404040, false)).thenReturn(34);
-        assertEquals(35, CardEditorScreen.NameField.drawPlain(g, font, text, 10, 20, 0x404040));
-        verify(g).drawString(font, text, 10, 20, 0x404040, false);
+    @Test void nameUsesNativeEditingAndTheNeoForgeShadowSetting() throws Exception {
+        var name = assertInstanceOf(CardEditorScreen.NameField.class, field("name"));
+        assertFalse(name.getTextShadow());
+        assertEquals(EditBox.class, name.getClass().getMethod("renderWidget",
+            net.minecraft.client.gui.GuiGraphics.class, int.class, int.class, float.class).getDeclaringClass());
     }
 
     @Test void toolbarUsesPixelIconsWithAccessibleNamesAndUnchangedActions() {

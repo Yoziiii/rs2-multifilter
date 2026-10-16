@@ -1,15 +1,11 @@
 package dev.rs2multifilter.minecraft.client;
 
 import com.google.gson.JsonParser;
-import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.Style;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
@@ -64,10 +60,7 @@ class NameFieldStartupRegressionTest {
         field.setCursorPosition(3);
         field.setHighlightPos(6);
         var graphics = mock(GuiGraphics.class);
-        try (var minecraft = mockStatic(Minecraft.class)) {
-            minecraft.when(Minecraft::getInstance).thenReturn(mock(Minecraft.class));
-            field.renderWidget(graphics, 0, 0, 0);
-        }
+        field.renderWidget(graphics, 0, 0, 0);
         verify(graphics, times(2)).drawString(eq(font), any(FormattedCharSequence.class), anyInt(), eq(20), anyInt(), eq(false));
         verify(graphics, never()).drawString(eq(font), any(FormattedCharSequence.class), anyInt(), anyInt(), anyInt());
         verify(graphics).fill(any(RenderType.class), anyInt(), anyInt(), anyInt(), anyInt(), anyInt());
@@ -76,53 +69,42 @@ class NameFieldStartupRegressionTest {
         assertEquals("ego", field.getHighlighted());
     }
 
-    @Test void ordinaryVanillaTextFieldsDoNotUseTheAdapter() {
+    @Test void ordinaryVanillaTextFieldsKeepTheirDefaultShadow() {
         var font = font();
         var field = new EditBox(font, 10, 20, 120, 9, Component.literal("ordinary"));
         field.setBordered(false);
         field.setValue("ordinary");
         var graphics = mock(GuiGraphics.class);
         field.renderWidget(graphics, 0, 0, 0);
-        verify(graphics).drawString(eq(font), any(FormattedCharSequence.class), anyInt(), anyInt(), anyInt());
+        assertTrue(field.getTextShadow());
+        verify(graphics).drawString(eq(font), any(FormattedCharSequence.class), anyInt(), anyInt(), anyInt(), eq(true));
         verify(graphics, never()).drawString(eq(font), any(FormattedCharSequence.class), anyInt(), anyInt(), anyInt(), eq(false));
     }
 
-    @Test void textOverloadsKeepFullContentAndNativeReturnWidth() {
-        var font = font();
-        var graphics = mock(GuiGraphics.class);
-        var text = FormattedCharSequence.forward("完整名称", Style.EMPTY);
-        when(graphics.drawString(font, text, 10, 20, 123, false)).thenReturn(34);
-        when(graphics.drawString(font, "_", 10, 20, 123, false)).thenReturn(16);
-        try (var minecraft = mockStatic(Minecraft.class)) {
-            minecraft.when(Minecraft::getInstance).thenReturn(mock(Minecraft.class));
-            var adapter = new NameFieldGraphics(graphics);
-            assertEquals(35, adapter.drawString(font, text, 10, 20, 123));
-            assertEquals(17, adapter.drawString(font, "_", 10, 20, 123));
-            adapter.drawString(font, Component.literal("完整提示"), 10, 20, 123);
-        }
-        verify(graphics, times(2)).drawString(eq(font), any(FormattedCharSequence.class), eq(10), eq(20), eq(123), eq(false));
-        verify(graphics).drawString(font, "_", 10, 20, 123, false);
+    @Test void nativeEditingReplacesOnlyTheSelectedTextAndKeepsTheCursor() {
+        var field = new CardEditorScreen.NameField(font(), 10, 20, 120, 9, Component.literal("name"));
+        field.setValue("category");
+        field.setCursorPosition(3);
+        field.setHighlightPos(6);
+        field.insertText("X");
+        assertEquals("catXry", field.getValue());
+        assertEquals(4, field.getCursorPosition());
+        assertEquals("", field.getHighlighted());
+        assertFalse(field.getTextShadow());
     }
 
-    @Test void borderSelectionAndScissorUseTheOriginalDrawingContext() {
+    @Test void nativeHintAndSuggestionAlsoUseTheSameShadowSetting() {
+        var font = font();
         var graphics = mock(GuiGraphics.class);
-        var pose = new PoseStack();
-        when(graphics.pose()).thenReturn(pose);
-        var sprite = ResourceLocation.withDefaultNamespace("widget/text_field");
-        try (var minecraft = mockStatic(Minecraft.class)) {
-            minecraft.when(Minecraft::getInstance).thenReturn(mock(Minecraft.class));
-            var adapter = new NameFieldGraphics(graphics);
-            assertSame(pose, adapter.pose());
-            adapter.blitSprite(sprite, 10, 20, 100, 9);
-            adapter.fill(10, 20, 30, 40, 123);
-            adapter.fill(RenderType.guiTextHighlight(), 10, 20, 30, 40, 123);
-            adapter.enableScissor(10, 20, 30, 40);
-            adapter.disableScissor();
-        }
-        verify(graphics).blitSprite(sprite, 10, 20, 100, 9);
-        verify(graphics).fill(10, 20, 30, 40, 123);
-        verify(graphics).fill(RenderType.guiTextHighlight(), 10, 20, 30, 40, 123);
-        verify(graphics).enableScissor(10, 20, 30, 40);
-        verify(graphics).disableScissor();
+        var field = new CardEditorScreen.NameField(font, 10, 20, 120, 9, Component.literal("name"));
+        field.setBordered(false);
+        var hint = Component.literal("完整分类名称");
+        field.setHint(hint);
+        field.renderWidget(graphics, 0, 0, 0);
+        verify(graphics).drawString(eq(font), eq(hint), anyInt(), anyInt(), anyInt(), eq(false));
+        field.setValue("category");
+        field.setSuggestion("完整建议");
+        field.renderWidget(graphics, 0, 0, 0);
+        verify(graphics).drawString(eq(font), eq("完整建议"), anyInt(), anyInt(), anyInt(), eq(false));
     }
 }
