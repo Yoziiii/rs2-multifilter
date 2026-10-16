@@ -1,6 +1,6 @@
 package dev.rs2multifilter.minecraft.client;
 
-import com.refinedmods.refinedstorage.api.resource.ResourceAmount;
+import com.refinedmods.refinedstorage.common.grid.AbstractGridContainerMenu;
 import com.refinedmods.refinedstorage.common.grid.GridContainerMenu;
 import com.refinedmods.refinedstorage.common.grid.GridData;
 import com.refinedmods.refinedstorage.common.grid.view.ItemGridResource;
@@ -12,9 +12,13 @@ import dev.rs2multifilter.core.FilterRule;
 import dev.rs2multifilter.minecraft.CardComponents;
 import dev.rs2multifilter.minecraft.MultiFilterMod;
 import dev.rs2multifilter.minecraft.storage.InstalledCardSlot;
+import dev.rs2multifilter.minecraft.storage.InstalledCardHolder;
 import net.minecraft.SharedConstants;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -24,13 +28,13 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.EntityBlock;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -124,6 +128,25 @@ class GridTerminalInteractionTest {
         slot.set(configuredCard(3));
         menu.clicked(slot.index, 0, ClickType.QUICK_MOVE, player);
         assertTrue(slot.getItem().isEmpty());
+        assertEquals(1, inventoryCardCount());
+    }
+
+    @Test void quickMoveAlsoClearsTheRealGridBlockEntityCardStorage() throws Exception {
+        var block = BuiltInRegistries.BLOCK.get(ResourceLocation.parse("refinedstorage:grid"));
+        var grid = ((EntityBlock) block).newBlockEntity(BlockPos.ZERO, block.defaultBlockState());
+        var holder = assertInstanceOf(InstalledCardHolder.class, grid);
+        var gridField = AbstractGridContainerMenu.class.getDeclaredField("grid");
+        gridField.setAccessible(true);
+        gridField.set(menu, grid);
+        var slot = cardSlots().get(0);
+        var original = configuredCard(0);
+        slot.set(original);
+        assertTrue(ItemStack.matches(original, holder.rs2mf$getInstalledCard(0)));
+        menu.clicked(slot.index, 0, ClickType.QUICK_MOVE, player);
+        assertTrue(holder.rs2mf$getInstalledCard(0).isEmpty());
+        assertTrue(slot.getItem().isEmpty());
+        assertEquals(1, inventoryCardCount());
+        menu.quickMoveStack(player, slot.index);
         assertEquals(1, inventoryCardCount());
     }
 

@@ -9,7 +9,6 @@
   },
   "client": [
     "GridSearchMixin",
-    "RepositoryFilterAccessor",
     "GridSlotOutsideClickMixin"
   ],
   "mixins": [
@@ -17,6 +16,7 @@
     "GridMenuAccessor",
     "ResourceMenuSlotInvoker",
     "GridNativeSlotsMixin",
-    "GridCardQuickMoveMixin"
+    "GridCardQuickMoveMixin",
+    "RepositoryFilterAccessor"
   ]
 }
