@@ -123,12 +123,7 @@ public final class GridFilterSession {
             ? BuiltInRegistries.ITEM.getKey(stack.getItem())
             : BuiltInRegistries.FLUID.getKey(fluid);
 
-        if (category.rules().isEmpty()) return false;
-        boolean includes = false;
-        boolean any = false;
-        boolean all = true;
-        for (FilterRule rule : category.rules()) {
-            boolean matched = switch (rule.kind()) {
+        return category.matches(rule -> switch (rule.kind()) {
                 case MOD -> id.getNamespace().equals(rule.value());
                 case ITEM -> isItem && id.toString().equals(rule.value());
                 case TAG -> isItem && stack.is(TagKey.create(Registries.ITEM,
@@ -142,20 +137,6 @@ public final class GridFilterSession {
                 case ENCHANTED -> isItem && stack.isEnchanted();
                 case CREATE_ATTRIBUTE -> isItem && CreateAttributeBridge.matches(rule.value(), stack);
                 case EXACT_ITEM -> isItem && ExactItemBridge.matches(rule.value(), stack);
-            };
-            if (rule.exclude()) {
-                if (matched) return false;
-            } else {
-                includes = true;
-                any |= matched;
-                all &= matched;
-            }
-        }
-        if (!includes) return true;
-        return switch (category.mode()) {
-            case ANY -> any;
-            case ALL -> all;
-            case DENY -> !any;
-        };
+        });
     }
 }

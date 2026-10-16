@@ -16,6 +16,7 @@
     "GridCardStorageMixin",
     "GridMenuAccessor",
     "ResourceMenuSlotInvoker",
-    "GridNativeSlotsMixin"
+    "GridNativeSlotsMixin",
+    "GridCardQuickMoveMixin"
   ]
 }

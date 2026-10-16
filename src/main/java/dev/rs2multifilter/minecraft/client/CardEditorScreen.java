@@ -102,10 +102,10 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
             AttributeOption option = attributes.get(item);
             final int yy = y + 96 + 18 * index;
             Component full = option.title();
-            addButton(x + 191, yy, 142, 17, shorten(full.getString(), 22),
-                full.getString() + " (从参考物品识别)", () -> addRule(option, false));
+            addRuleEntry(x + 191, yy, 142, 17, shorten(full.getString(), 22),
+                full.getString() + " (从参考物品识别)", option.kind(), option.value(), () -> addRule(option, false));
             addButton(x + 336, yy, 20, 17, "+", "添加包含条件", () -> addRule(option, false));
-            addButton(x + 358, yy, 20, 17, "−", "添加排除条件", () -> addRule(option, true));
+            addButton(x + 358, yy, 20, 17, "−", "添加反向词条：排除匹配该属性的物品", () -> addRule(option, true));
         }
 
         if (hasCategory()) {
@@ -117,8 +117,8 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
                 FilterRule rule = rules.get(target);
                 String label = (rule.exclude() ? "− " : "+ ") + ruleDescription(rule);
                 int yy = y + 209 + index * 17;
-                addButton(x + 191, yy, 162, 16, shorten(label, 22),
-                    label + "（点击可查看规则，右侧 × 删除）", () -> message(label, false));
+                addRuleEntry(x + 191, yy, 162, 16, shorten(label, 22),
+                    label + "（点击可查看规则，右侧 × 删除）", rule.kind(), rule.value(), () -> message(label, false));
                 addButton(x + 355, yy, 23, 16, "×", "删除这条规则",
                     () -> deleteRule(target));
             }
@@ -141,6 +141,19 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
                 case ALL -> "必须符合全部包含规则才显示";
                 case DENY -> "匹配包含规则的物品会被排除";
             }, () -> changeMode(mode));
+    }
+
+    private void addRuleEntry(int x, int y, int w, int h, String label, String tooltip,
+                              FilterRule.Kind kind, String value, Runnable action) {
+        RuleEntryButton button = new RuleEntryButton(x, y, w, h, Component.literal(label),
+            b -> action.run(), RuleClipboard.value(kind, value), copied -> {
+                if (minecraft != null) {
+                    minecraft.keyboardHandler.setClipboard(copied);
+                    message("已复制", false);
+                }
+            });
+        button.setTooltip(Tooltip.create(Component.literal(tooltip + "；右键复制完整内部值")));
+        addRenderableWidget(button);
     }
     private boolean hasCategory() {
         return category >= 0 && category < working.categories().size();
@@ -412,16 +425,6 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         if (name != null && name.isFocused() && keyCode != 256)
             return name.keyPressed(keyCode, scanCode, modifiers);
         return super.keyPressed(keyCode, scanCode, modifiers);
-    }
-
-    @Override public boolean mouseScrolled(double mouseX, double mouseY,
-                                           double deltaX, double deltaY) {
-        if (mouseX >= left()+190 && mouseX <= left()+378
-            && mouseY >= top()+94 && mouseY <= top()+187) {
-            pageAttributes(deltaY > 0 ? -1 : 1);
-            return true;
-        }
-        return super.mouseScrolled(mouseX, mouseY, deltaX, deltaY);
     }
 
     @Override public void renderBackground(GuiGraphics g, int mx, int my, float tick) {
