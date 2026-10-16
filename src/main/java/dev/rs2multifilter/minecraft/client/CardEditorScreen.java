@@ -154,9 +154,14 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         excludeButton.active = ready;
         if (ready) {
             var option = attributes.get(attributeIndex);
-            includeButton.active = !current().rules().contains(new FilterRule(option.kind(), option.value(), false));
-            excludeButton.active = !current().rules().contains(new FilterRule(option.kind(), option.value(), true));
+            includeButton.active = !hasRule(option, false);
+            excludeButton.active = !hasRule(option, true);
         }
+    }
+
+    private boolean hasRule(AttributeOption option, boolean exclude) {
+        return current().rules().stream().anyMatch(rule -> rule.kind() == option.kind()
+            && rule.value().equals(option.value()) && rule.exclude() == exclude);
     }
 
     private void clearRules() {

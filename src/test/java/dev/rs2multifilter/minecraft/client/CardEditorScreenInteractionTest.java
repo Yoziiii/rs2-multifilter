@@ -4,6 +4,8 @@ import dev.rs2multifilter.core.*;
 import dev.rs2multifilter.minecraft.menu.CardEditorLayout;
 import dev.rs2multifilter.minecraft.menu.CardEditorMenu;
 import net.minecraft.SharedConstants;
+import net.minecraft.client.InputType;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -51,6 +53,13 @@ class CardEditorScreenInteractionTest {
         Field fontField = Screen.class.getDeclaredField("font");
         fontField.setAccessible(true);
         fontField.set(screen, font);
+        // Vanilla rebuildWidgets restores keyboard focus through the client.
+        // Supply that context without starting a window or touching the clipboard.
+        var client = mock(Minecraft.class);
+        when(client.getLastInputType()).thenReturn(InputType.MOUSE);
+        Field clientField = Screen.class.getDeclaredField("minecraft");
+        clientField.setAccessible(true);
+        clientField.set(screen, client);
         screen.width = 320;
         screen.height = 240;
         Class<?> optionType = Class.forName(CardEditorScreen.class.getName() + "$AttributeOption");
@@ -171,6 +180,20 @@ class CardEditorScreenInteractionTest {
             assertTrue(x + 248 <= screen.width - 4);
             assertTrue(y + 142 <= screen.height - 4);
         }
+    }
+
+    @Test void anUnsupportedLongCandidateCannotCrashOpeningOrCorruptExistingRules() throws Exception {
+        Class<?> type = Class.forName(CardEditorScreen.class.getName() + "$AttributeOption");
+        var constructor = type.getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        @SuppressWarnings("unchecked") var options = (List<Object>) field("attributes");
+        options.clear();
+        options.add(constructor.newInstance(Component.literal("长标签"), FilterRule.Kind.TAG,
+            "test:" + "a".repeat(260)));
+        screen.init();
+        ((EditorButton) field("includeButton")).onPress();
+        assertEquals(initial, field("working"));
+        assertEquals(true, field("isError"));
     }
 
     private Object field(String name) throws Exception {
