@@ -400,7 +400,210 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         if (sample.isDamaged())
             attributes.add(new AttributeOption(Component.literal("已损坏"),
                 FilterRule.Kind.DAMAGED, "true"));
-        if (sam…2659 tokens truncated…n    @Override public void render(GuiGraphics g, int mx, int my, float tick) {
+        if (sample.isEnchanted())
+            attributes.add(new AttributeOption(Component.literal("已附魔"),
+                FilterRule.Kind.ENCHANTED, "true"));
+
+        var fluid = FluidSampleSupport.findFluid(sample);
+        if (fluid != null) {
+            ResourceLocation fluidId = BuiltInRegistries.FLUID.getKey(fluid);
+            attributes.add(new AttributeOption(Component.literal("流体：" + fluidId),
+                FilterRule.Kind.FLUID, fluidId.toString()));
+            fluid.defaultFluidState().getTags().map(tag -> new AttributeOption(
+                Component.literal("流体标签：" + tag.location()),
+                FilterRule.Kind.FLUID_TAG, tag.location().toString()))
+                .forEach(attributes::add);
+        }
+        for (var attribute : CreateAttributeBridge.getSampleAttributes(sample)) {
+            attributes.add(new AttributeOption(Component.literal(attribute.label()),
+                FilterRule.Kind.CREATE_ATTRIBUTE, attribute.value()));
+        }
+    }
+
+    private static String ruleDescription(FilterRule rule) {
+        return switch (rule.kind()) {
+            case MOD -> "模组：" + ModList.get().getModContainerById(rule.value())
+                .map(m -> m.getModInfo().getDisplayName()).orElse(rule.value());
+            case ITEM -> "物品：" + rule.value() + "（模糊）";
+            case EXACT_ITEM -> ExactItemBridge.describe(rule.value());
+            case TAG -> "标签：" + rule.value();
+            case FLUID -> "流体：" + rule.value();
+            case FLUID_TAG -> "流体标签：" + rule.value();
+            case FOOD -> "可食用";
+            case DAMAGEABLE -> "可损坏";
+            case DAMAGED -> "已损坏";
+            case ENCHANTED -> "已附魔";
+            case CREATE_ATTRIBUTE -> CreateAttributeBridge.describe(rule.value());
+        };
+    }
+
+    private void saveCard() {
+        if (!commitName()) return;
+        try {
+            PacketDistributor.sendToServer(new SaveCardPayload(menu.containerId, CardWireCodec.encode(working)));
+        } catch (RuntimeException ex) {
+            message("保存失败：" + ex.getMessage(), true);
+        }
+    }
+
+    private void clearReference() {
+        if (minecraft == null || minecraft.gameMode == null || minecraft.player == null) return;
+        minecraft.gameMode.handleInventoryMouseClick(menu.containerId,
+            CardEditorMenu.REFERENCE_SLOT, 0, ClickType.PICKUP, minecraft.player);
+        setSample(menu.referenceItem());
+    }
+
+    @Override protected void containerTick() {
+        super.containerTick();
+        setSample(menu.referenceItem());
+        if (noticeTicks > 0) noticeTicks--;
+    }
+
+    @Override protected void slotClicked(Slot slot, int slotId, int button, ClickType type) {
+        super.slotClicked(slot, slotId, button, type);
+        if (slot != null && menu.isPlayerSlot(slotId) && button == 0 && type == ClickType.PICKUP) {
+            // Cosmetic drag only: the real menu cursor never receives this copy.
+            dragged = slot.getItem().copyWithCount(1);
+        }
+        setSample(menu.referenceItem());
+    }
+
+    @Override public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (ruleMouseDown) {
+            ruleMouseDown = false;
+            for (var widget : ruleWidgets) widget.mouseReleased(mouseX, mouseY, button);
+            return true;
+        }
+        boolean result = super.mouseReleased(mouseX, mouseY, button);
+        dragged = ItemStack.EMPTY;
+        return result;
+    }
+
+    @Override public boolean mouseClicked(double mx, double my, int button) {
+        if (button == 1 && selector != null && selector.mouseClicked(mx, my, button)) {
+            ruleMouseDown = true;
+            return true;
+        }
+        if (new Rect(left() + RULE_PANEL.x(), top() + RULE_PANEL.y(), RULE_PANEL.width(), RULE_PANEL.height()).contains(mx, my)) {
+            ruleMouseDown = true;
+            for (var widget : ruleWidgets) if (widget.mouseClicked(mx, my, button)) return true;
+            return true;
+        }
+        return super.mouseClicked(mx, my, button);
+    }
+
+    @Override public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        return ruleMouseDown || super.mouseDragged(mx, my, button, dx, dy);
+    }
+
+    @Override public boolean mouseScrolled(double mx, double my, double dx, double dy) {
+        if (ruleArea != null && ruleArea.contains(mx, my) && dy != 0) {
+            int max = hasCategory() ? Math.max(0, current().rules().size() - RULE_ROWS) : 0;
+            int next = Math.max(0, Math.min(max, ruleOffset + (dy < 0 ? 1 : -1)));
+            if (next != ruleOffset) {
+                ruleOffset = next;
+                rebuildRulePanel();
+            }
+            return true;
+        }
+        return selector != null && selector.mouseScrolled(mx, my, dx, dy);
+    }
+
+    @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (name != null && name.isFocused() && keyCode != 256)
+            return name.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override public void renderBackground(GuiGraphics g, int mx, int my, float tick) {
+        g.fill(0, 0, width, height, 0xA8000000);
+        renderBg(g, tick, mx, my);
+    }
+
+    @Override protected void renderBg(GuiGraphics g, float tick, int mx, int my) {
+        int x = left(), y = top();
+        RsUi.panel(g, x, y, W, CONFIG_HEIGHT);
+        // RS gray surface throughout; hierarchy comes from native frames.
+        g.fill(x + 4, y + 4, x + W - 4, y + 16, 0xFFD5D5D0);
+        String title = "过滤升级";
+        g.drawString(font, title, x + (W - font.width(title)) / 2, y + 4, 0xFF404040, false);
+        g.fill(x + NAME.x(), y + NAME.y(), x + NAME.x() + NAME.width(), y + NAME.y() + NAME.height(), 0xFFF0F0EA);
+        g.fill(x + NAME.x(), y + NAME.y(), x + NAME.x() + NAME.width(), y + NAME.y() + 1, 0xFF777B7B);
+        if (hasCategory()) {
+            String position = (category + 1) + "/" + working.categories().size();
+            g.drawString(font, position, x + W - 8 - font.width(position), y + 4, 0xFF606060, false);
+        }
+        if (hasCategory()) {
+            ResourceLocation icon = ResourceLocation.tryParse(current().iconItemId());
+            ItemStack stack = icon != null && BuiltInRegistries.ITEM.containsKey(icon)
+                ? new ItemStack(BuiltInRegistries.ITEM.get(icon)) : new ItemStack(Items.PAPER);
+            g.pose().pushPose();
+            g.pose().translate(x + 5, y + 2, 0);
+            g.pose().scale(.625f, .625f, .625f);
+            g.renderItem(stack, 0, 0);
+            g.pose().popPose();
+        }
+        slotFrame(g, x + REFERENCE_X, y + REFERENCE_Y);
+        if (noticeTicks > 0)
+            g.drawString(font, EditorText.fit(notice, W - 52, font::width), x + 42, y + 75,
+                isError ? 0xFF9A2222 : 0xFF504B42, false);
+
+        RsUi.panel(g, x + INVENTORY.x(), y + INVENTORY.y(), INVENTORY.width(), INVENTORY.height());
+        g.drawString(font, "物品栏", x + INVENTORY.x() + 8, y + INVENTORY.y() + 6, 0xFF484848, false);
+        for (int i = 0; i < CardEditorMenu.PLAYER_SLOT_COUNT; i++) {
+            Slot slot = menu.getSlot(i);
+            slotFrame(g, x + slot.x, y + slot.y);
+        }
+        RsUi.panel(g, x + RULE_PANEL.x(), y + RULE_PANEL.y(), RULE_PANEL.width(), RULE_PANEL.height());
+        int count = hasCategory() ? current().rules().size() : 0;
+        g.drawString(font, "已选规则 " + count, x + RULE_PANEL.x() + 5, y + RULE_PANEL.y() + 6, 0xFF504B42, false);
+        if (count == 0) g.drawString(font, "尚无规则", x + RULE_LIST.x() + 5, y + RULE_LIST.y() + 4, 0xFF787369, false);
+        else g.drawString(font, (ruleOffset + 1) + "–" + Math.min(count, ruleOffset + RULE_ROWS) + "/" + count,
+            x + RULE_PANEL.x() + 5, y + RULE_PANEL.y() + 96, 0xFF777166, false);
+    }
+
+    private static void slotFrame(GuiGraphics g, int x, int y) {
+        RsUi.slot(g, x, y);
+    }
+
+    @Override protected void renderLabels(GuiGraphics g, int mx, int my) {}
+
+    private java.util.List<net.minecraft.util.FormattedCharSequence> wrapTooltip(List<Component> lines) {
+        int pixels = Math.max(80, Math.min(340, width - 24));
+        return lines.stream().flatMap(line -> font.split(line, pixels).stream()).toList();
+    }
+
+    @Override protected void renderTooltip(GuiGraphics g, int mx, int my) {
+        List<Component> candidates = candidateTooltipAt(mx, my, 16);
+        if (!candidates.isEmpty()) {
+            var wrapped = wrapTooltip(candidates);
+            for (int entries = 15; wrapped.size() * 9 > height - 20 && entries >= 3; entries--)
+                wrapped = wrapTooltip(candidateTooltipAt(mx, my, entries));
+            g.renderTooltip(font, wrapped, mx, my);
+            return;
+        }
+        for (int i = 0; i < ruleWidgets.size(); i++) {
+            var widget = ruleWidgets.get(i);
+            if (!widget.isMouseOver(mx, my)) continue;
+            if ((i & 1) == 1) g.renderComponentTooltip(font, List.of(Component.literal("删除这条规则")), mx, my);
+            else if (hasCategory()) {
+                var rule = current().rules().get(ruleOffset + i / 2);
+                var lines = RuleClipboard.tooltip(rule.kind(), ruleDescription(rule), rule.value(), rule.exclude())
+                    .stream().map(Component::literal).map(Component.class::cast).toList();
+                g.renderTooltip(font, wrapTooltip(lines), mx, my);
+            }
+            return;
+        }
+        if (new Rect(left() + REFERENCE_X - 1, top() + REFERENCE_Y - 1, 18, 18).contains(mx, my)) {
+            List<Component> lines = new ArrayList<>();
+            if (!sample.isEmpty()) lines.add(sample.getHoverName());
+            lines.add(Component.literal("从背包点选样本；点击此槽清空"));
+            lines.add(Component.literal("样本不消耗物品，也不永久保存"));
+            g.renderComponentTooltip(font, lines, mx, my);
+        } else super.renderTooltip(g, mx, my);
+    }
+
+    @Override public void render(GuiGraphics g, int mx, int my, float tick) {
         super.render(g, mx, my, tick);
         for (var widget : ruleWidgets) widget.render(g, mx, my, tick);
         if (!dragged.isEmpty()) g.renderItem(dragged, mx - 8, my - 8);
