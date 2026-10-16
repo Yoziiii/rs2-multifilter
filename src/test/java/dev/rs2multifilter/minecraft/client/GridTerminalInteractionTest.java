@@ -33,6 +33,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import com.refinedmods.refinedstorage.common.grid.screen.AbstractGridScreen;
+import net.neoforged.neoforge.client.event.ScreenEvent;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -41,6 +47,7 @@ import static org.mockito.Mockito.*;
 
 /** Integration tests execute the real RS menu, installed slots, and repository view. */
 class GridTerminalInteractionTest {
+    @TempDir Path settingsDirectory;
     private Player player;
     private Inventory inventory;
     private GridContainerMenu menu;
@@ -96,6 +103,64 @@ class GridTerminalInteractionTest {
             assertTrue(inventory.items.stream().anyMatch(s -> ItemStack.matches(s, original)));
             assertTrue(menu.getCarried().isEmpty());
         }
+    }
+
+    @Test void categoryStripResizeDoesNotStackFiltersAndCloseRemembersTheActualSelection() throws Exception {
+        loadResources(Items.DIRT, Items.STONE);
+        var card = FilterCard.blank().withCategory(new FilterCategory("泥土", "minecraft:dirt", List.of(
+                new FilterRule(FilterRule.Kind.ITEM, "minecraft:dirt", false))))
+            .withCategory(new FilterCategory("石头", "minecraft:stone", List.of(
+                new FilterRule(FilterRule.Kind.ITEM, "minecraft:stone", false))));
+        for (int i = 0; i < 4; i++) ClientCardState.update(menu.containerId, i, i == 0 ? CardWireCodec.encode(card) : "");
+        var preferences = new GridPreferences(settingsDirectory.resolve("settings.properties"));
+        var field = GridTabs.class.getDeclaredField("preferences");
+        field.setAccessible(true);
+        Object before = field.get(null);
+        field.set(null, preferences);
+        var screen = mock(AbstractGridScreen.class);
+        when(screen.getMenu()).thenReturn(menu);
+        when(screen.getGuiLeft()).thenReturn(50);
+        when(screen.getGuiTop()).thenReturn(30);
+        var init = mock(ScreenEvent.Init.Post.class);
+        when(init.getScreen()).thenReturn(screen);
+        var closing = mock(ScreenEvent.Closing.class);
+        when(closing.getScreen()).thenReturn(screen);
+        try (var client = mockStatic(Minecraft.class)) {
+            client.when(Minecraft::getInstance).thenReturn(mock(Minecraft.class));
+            GridTabs.onScreenInit(init);
+            var widgets = org.mockito.ArgumentCaptor.forClass(net.minecraft.client.gui.components.events.GuiEventListener.class);
+            verify(init, times(5)).addListener(widgets.capture());
+            ((EditorButton) widgets.getAllValues().get(2)).onPress();
+            assertVisible(Items.DIRT);
+            var resize = mock(ScreenEvent.Init.Post.class);
+            when(resize.getScreen()).thenReturn(screen);
+            GridTabs.onScreenInit(resize);
+            var resizedWidgets = org.mockito.ArgumentCaptor.forClass(net.minecraft.client.gui.components.events.GuiEventListener.class);
+            verify(resize, times(5)).addListener(resizedWidgets.capture());
+            ((EditorButton) resizedWidgets.getAllValues().get(2)).onPress();
+            assertVisible(Items.STONE);
+            GridTabs.onScreenClosing(closing);
+            assertEquals(1, new GridPreferences(settingsDirectory.resolve("settings.properties")).restore("unknown", card));
+            assertFalse(ClientCardState.hasSync(menu.containerId));
+        } finally {
+            GridTabs.onScreenClosing(closing);
+            field.set(null, before);
+        }
+    }
+
+    @Test void attachedSlotsDrawOpaqueGrayBelowItemsAndBackgroundMixinIsApplied() throws Exception {
+        var screen = mock(AbstractGridScreen.class);
+        when(screen.getGuiLeft()).thenReturn(50);
+        when(screen.getGuiTop()).thenReturn(30);
+        var graphics = mock(GuiGraphics.class);
+        GridTabs.renderAttachedPanels(screen, graphics);
+        for (int i = 0; i < 4; i++) {
+            int x = 254, y = 36 + i * 18;
+            verify(graphics).fill(x, y, x + 16, y + 16, 0xFF8B8B8B);
+        }
+        var target = Class.forName("com.refinedmods.refinedstorage.common.support.stretching.AbstractStretchingScreen");
+        assertTrue(Arrays.stream(target.getDeclaredMethods()).anyMatch(m -> m.getName().contains("rs2mf$panels")),
+            "The actual RS background class must include our injected callback");
     }
 
     @Test void fullInventoryKeepsAllFourCardsAndRetryCannotDuplicateThem() {

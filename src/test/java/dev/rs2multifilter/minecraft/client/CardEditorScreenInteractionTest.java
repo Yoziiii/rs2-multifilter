@@ -90,6 +90,37 @@ class CardEditorScreenInteractionTest {
         verify(menu, never()).clicked(anyInt(), anyInt(), any(), any());
     }
 
+    @Test void emptyCardGetsExactlyOneEditableDefaultWithoutSilentlySaving() throws Exception {
+        when(menu.initialCard()).thenReturn(FilterCard.blank());
+        var opened = new CardEditorScreen(menu, new Inventory(mock(Player.class)), Component.literal("过滤升级"));
+        var working = CardEditorScreen.class.getDeclaredField("working");
+        working.setAccessible(true);
+        FilterCard draft = (FilterCard) working.get(opened);
+        assertEquals(1, draft.categories().size());
+        assertEquals("默认分类", draft.categories().getFirst().name());
+        assertEquals(draft, draft.forEditing().forEditing());
+        assertTrue(menu.initialCard().categories().isEmpty(), "Opening does not silently save the draft");
+    }
+
+    @Test void titleRenderingUsesTheNewNameWithoutAShadow() {
+        var g = mock(net.minecraft.client.gui.GuiGraphics.class);
+        when(g.pose()).thenReturn(new com.mojang.blaze3d.vertex.PoseStack());
+        var inventory = new net.minecraft.world.SimpleContainer(36);
+        for (int i = 0; i < 36; i++) when(menu.getSlot(i)).thenReturn(
+            new net.minecraft.world.inventory.Slot(inventory, i, 15 + i % 9 * 18, 144 + i / 9 * 18));
+        screen.renderBg(g, 0, 0, 0);
+        verify(g).drawString(eq(font), eq("过滤升级"), anyInt(), anyInt(), anyInt(), eq(false));
+        verify(g, never()).drawCenteredString(any(Font.class), anyString(), anyInt(), anyInt(), anyInt());
+    }
+
+    @Test void toolbarUsesPixelIconsWithAccessibleNamesAndUnchangedActions() {
+        var toolbar = screen.children().stream().filter(EditorButton.class::isInstance)
+            .map(EditorButton.class::cast).toList();
+        assertFalse(toolbar.isEmpty());
+        assertTrue(toolbar.stream().allMatch(b -> b.icon() != null));
+        assertTrue(toolbar.stream().allMatch(b -> !b.getMessage().getString().isBlank()));
+    }
+
     @Test void wheelOverInventoryOrButtonsCannotChangeAttributes() throws Exception {
         int left = (screen.width - CardEditorLayout.WIDTH) / 2;
         int top = (screen.height - CardEditorLayout.HEIGHT) / 2;

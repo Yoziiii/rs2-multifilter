@@ -18,6 +18,8 @@ import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.common.extensions.IMenuTypeExtension;
 import com.mojang.serialization.Codec;
+import com.refinedmods.refinedstorage.common.api.RefinedStorageApi;
+import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 
 @Mod(MultiFilterMod.ID)
 public final class MultiFilterMod {
@@ -47,6 +49,12 @@ public final class MultiFilterMod {
         RECIPES.register(modBus);
         MENUS.register(modBus);
         modBus.addListener(this::onPayloadRegistration);
+        modBus.addListener(MultiFilterMod::onCreativeTab);
+    }
+
+    public static void onCreativeTab(BuildCreativeModeTabContentsEvent event) {
+        if (event.getTabKey().location().equals(RefinedStorageApi.INSTANCE.getCreativeModeTabId()))
+            event.accept(FILTER_CARD.get());
     }
 
     private void onPayloadRegistration(RegisterPayloadHandlersEvent event) {

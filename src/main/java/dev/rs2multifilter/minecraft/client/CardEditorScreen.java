@@ -50,7 +50,7 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         super(menu, inventory, title);
         imageWidth = W;
         imageHeight = H;
-        working = menu.initialCard();
+        working = menu.initialCard().forEditing();
         if (!working.categories().isEmpty()) category = 0;
     }
 
@@ -61,17 +61,21 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         String draft = name != null && displayedCategory == category ? name.getValue()
             : hasCategory() ? current().name() : "";
         super.init();
-        name = new EditBox(font, left() + NAME.x(), top() + NAME.y(), NAME.width(), NAME.height(),
+        name = new EditBox(font, left() + NAME.x() + 4, top() + NAME.y() + 5, NAME.width() - 8, 9,
             Component.literal("分类名称"));
+        name.setBordered(false);
+        name.setTextColor(0xFF404648);
+        name.setTextColorUneditable(0xFF858580);
+        name.setTooltip(Tooltip.create(Component.literal("编辑分类名称；切换、添加规则或保存时应用")));
         name.setMaxLength(32);
         name.setValue(draft);
         name.setEditable(hasCategory());
         addRenderableWidget(name);
         displayedCategory = category;
-        button(PREVIOUS, "‹", "上一个分类", () -> moveCategory(-1)).active = hasCategory();
-        button(NEXT, "›", "下一个分类", () -> moveCategory(1)).active = hasCategory();
-        button(NEW_CATEGORY, "+", "新建分类", this::addCategory);
-        button(DELETE_CATEGORY, "删", "删除当前分类及其规则", this::deleteCategory).active = hasCategory();
+        iconButton(PREVIOUS, EditorIcon.PREVIOUS, "上一个分类", () -> moveCategory(-1)).active = hasCategory();
+        iconButton(NEXT, EditorIcon.NEXT, "下一个分类", () -> moveCategory(1)).active = hasCategory();
+        iconButton(NEW_CATEGORY, EditorIcon.FOLDER, "新建分类", this::addCategory);
+        iconButton(DELETE_CATEGORY, EditorIcon.TRASH, "删除当前分类及其规则", this::deleteCategory).active = hasCategory();
 
         selector = new AttributeSelector(left() + ATTRIBUTE.x(), top() + ATTRIBUTE.y(),
             ATTRIBUTE.width(), ATTRIBUTE.height(), this::copy, index -> {
@@ -88,6 +92,8 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         includeButton.setSelected(true);
         excludeButton.setSelected(true);
         excludeButton.setAccent(0xFF9A6852);
+        includeButton.setIcon(EditorIcon.ADD);
+        excludeButton.setIcon(EditorIcon.EXCLUDE);
         updateAddButtons();
 
         FilterCategory.Mode mode = hasCategory() ? current().mode() : FilterCategory.Mode.ANY;
@@ -97,14 +103,15 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
             "全部：满足全部普通词条，且不匹配排除词条");
         modeButton(DENY, "非", FilterCategory.Mode.DENY, mode,
             "黑名单：匹配普通词条的物品会被排除；排除词条始终排除");
-        var fuzzyButton = button(FUZZY, fuzzy ? "模糊" : "精确",
-            "模糊：忽略附魔、耐久等数据；精确：这些数据必须相同。切换会转换已有物品规则", this::toggleFuzzy);
+        var fuzzyButton = iconButton(FUZZY, fuzzy ? EditorIcon.FUZZY : EditorIcon.EXACT,
+            (fuzzy ? "当前：模糊匹配\n" : "当前：精确匹配\n")
+                + "模糊：忽略附魔、耐久等数据；精确：这些数据必须相同。切换会转换已有物品规则", this::toggleFuzzy);
         fuzzyButton.setSelected(fuzzy);
-        button(ICON, "图标", "将参考物品设为当前分类图标", this::useSampleAsIcon)
+        iconButton(ICON, EditorIcon.PICTURE, "将参考物品设为当前分类图标", this::useSampleAsIcon)
             .active = hasCategory() && !sample.isEmpty();
-        button(CLEAR_RULES, "清空", "清空当前分类的全部规则，保留分类与参考物品", this::clearRules)
+        iconButton(CLEAR_RULES, EditorIcon.CLEAR, "清空当前分类的全部规则，保留分类与参考物品", this::clearRules)
             .active = hasCategory() && !current().rules().isEmpty();
-        button(SAVE, "保存", "保存所有分类至过滤卡", this::saveCard);
+        iconButton(SAVE, EditorIcon.CONFIRM, "保存所有分类至过滤升级", this::saveCard);
         rebuildRulePanel();
     }
 
@@ -118,8 +125,19 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
     private void modeButton(Rect r, String label, FilterCategory.Mode mode,
                             FilterCategory.Mode selected, String hint) {
         var button = button(r, label, hint, () -> changeMode(mode));
+        button.setIcon(switch (mode) {
+            case ANY -> EditorIcon.ANY;
+            case ALL -> EditorIcon.ALL;
+            case DENY -> EditorIcon.DENY;
+        });
         button.setSelected(mode == selected);
         button.active = hasCategory();
+    }
+
+    private EditorButton iconButton(Rect r, EditorIcon icon, String hint, Runnable action) {
+        var button = button(r, hint, hint, action);
+        button.setIcon(icon);
+        return button;
     }
 
     private void copy(String text) {
@@ -184,6 +202,7 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
             var delete = new EditorButton(ruleArea.x() + ruleArea.width() - 14, yy, 13, 13,
                 Component.literal("×"), b -> deleteRule(target));
             delete.setCompact(true);
+            delete.setIcon(EditorIcon.TRASH);
             ruleWidgets.add(delete);
         }
     }
@@ -221,7 +240,7 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
     private void addCategory() {
         if (!commitName()) return;
         if (working.categories().size() >= FilterCard.MAX_PER_CARD) {
-            message("一张过滤卡最多 64 个分类", true); return;
+            message("一个过滤升级最多 64 个分类", true); return;
         }
         String icon = sample.isEmpty() ? "minecraft:paper" : itemId(sample).toString();
         working = working.withCategory(new FilterCategory(
@@ -501,8 +520,16 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
                 if (((xx - x + yy - y) / 2 & 1) == 0)
                     g.fill(xx, yy, xx + 1, yy + 1, 0xFFB5A88D);
         EditorButton.frame(g, x, y, W, 15, 0xFFE6B95E);
-        String title = "属性过滤卡" + (hasCategory() ? " · " + (category + 1) + "/" + working.categories().size() : "");
-        g.drawCenteredString(font, title, x + W / 2, y + 4, 0xFF593A27);
+        String title = "过滤升级";
+        g.drawString(font, title, x + (W - font.width(title)) / 2, y + 4, 0xFF593A27, false);
+        // One continuous RS-style category strip instead of separate dark buttons.
+        EditorButton.frame(g, x + 5, y + 18, W - 10, 24, 0xFFC6C6C6);
+        g.fill(x + NAME.x(), y + NAME.y(), x + NAME.x() + NAME.width(), y + NAME.y() + NAME.height(), 0xFFF0F0EA);
+        g.fill(x + NAME.x(), y + NAME.y(), x + NAME.x() + NAME.width(), y + NAME.y() + 1, 0xFF777B7B);
+        if (hasCategory()) {
+            String position = (category + 1) + "/" + working.categories().size();
+            g.drawString(font, position, x + W - 8 - font.width(position), y + 4, 0xFF70532E, false);
+        }
         if (hasCategory()) {
             ResourceLocation icon = ResourceLocation.tryParse(current().iconItemId());
             ItemStack stack = icon != null && BuiltInRegistries.ITEM.containsKey(icon)
@@ -515,7 +542,7 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         }
         EditorButton.frame(g, x + 1, y + 84, W - 2, CONFIG_HEIGHT - 85, 0xFFC6C6C4);
         g.fill(x + 84, y + 92, x + 85, y + 112, 0xFF858580);
-        g.fill(x + 191, y + 92, x + 192, y + 112, 0xFF858580);
+        g.fill(x + 246, y + 92, x + 247, y + 112, 0xFF858580);
         slotFrame(g, x + REFERENCE_X, y + REFERENCE_Y);
         if (noticeTicks > 0)
             g.drawString(font, EditorText.fit(notice, W - 52, font::width), x + 42, y + 75,

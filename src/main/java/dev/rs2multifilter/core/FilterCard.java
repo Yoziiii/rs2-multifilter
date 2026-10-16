@@ -14,6 +14,11 @@ public record FilterCard(int dataVersion, List<FilterCategory> categories) {
     }
 
     public static FilterCard blank() { return new FilterCard(VERSION, List.of()); }
+    /** Editor-only draft initialization; persisted empty cards keep their format and meaning. */
+    public FilterCard forEditing() {
+        return categories.isEmpty()
+            ? withCategory(new FilterCategory("默认分类", "minecraft:paper", List.of())) : this;
+    }
     public FilterCard copy() { return new FilterCard(dataVersion, categories); }
     public FilterCard withCategory(FilterCategory category) {
         var copy = new java.util.ArrayList<>(categories);

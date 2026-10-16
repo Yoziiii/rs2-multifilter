@@ -9,6 +9,7 @@
   },
   "client": [
     "GridSearchMixin",
+    "GridPanelBackgroundMixin",
     "GridSlotOutsideClickMixin"
   ],
   "mixins": [

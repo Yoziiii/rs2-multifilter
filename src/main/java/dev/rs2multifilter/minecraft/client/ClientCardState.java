@@ -21,6 +21,10 @@ public final class ClientCardState {
         return slots != null && slots[slot] != null && !slots[slot].isEmpty();
     }
     public static boolean hasSync(int menuId) { return SYNCED.containsKey(menuId); }
+    public static boolean hasCompleteSync(int menuId) {
+        String[] slots = SYNCED.get(menuId);
+        return slots != null && Arrays.stream(slots).allMatch(Objects::nonNull);
+    }
     public static FilterCard card(int menuId) {
         String[] slots = SYNCED.get(menuId);
         if (slots == null) return FilterCard.blank();
