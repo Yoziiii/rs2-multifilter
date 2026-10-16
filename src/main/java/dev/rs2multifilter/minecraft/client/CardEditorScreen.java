@@ -2,17 +2,20 @@ package dev.rs2multifilter.minecraft.client;
 
 import dev.rs2multifilter.core.*;
 import dev.rs2multifilter.minecraft.network.SaveCardPayload;
-import net.minecraft.client.Minecraft;
+import dev.rs2multifilter.minecraft.menu.CardEditorMenu;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.Slot;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -25,9 +28,9 @@ import java.util.List;
  * selection: sample ghost slot, scrollable attributes, +/- each rule, OR/AND/DENY.
  * All editing happens on ONE screen; no secondary attribute picker screen.
  */
-public final class CardEditorScreen extends Screen {
-    private static final int W = 388;
-    private static final int H = 273;
+public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMenu> {
+    private static final int W = CardEditorMenu.WIDTH;
+    private static final int H = CardEditorMenu.HEIGHT;
     private static final int ATTRIBUTE_ROWS = 5;
     private static final int RULE_ROWS = 3;
     private FilterCard working;
@@ -44,16 +47,19 @@ public final class CardEditorScreen extends Screen {
 
     private record AttributeOption(Component title, FilterRule.Kind kind, String value) {}
 
-    public CardEditorScreen(FilterCard initial) {
-        super(Component.literal("过滤升级"));
-        this.working = initial;
-        if (!initial.categories().isEmpty()) category = 0;
+    public CardEditorScreen(CardEditorMenu menu, Inventory inventory, Component title) {
+        super(menu, inventory, title);
+        imageWidth = W;
+        imageHeight = H;
+        this.working = menu.initialCard();
+        if (!working.categories().isEmpty()) category = 0;
     }
 
-    private int left() { return (width - W) / 2; }
-    private int top() { return (height - H) / 2; }
+    private int left() { return leftPos; }
+    private int top() { return topPos; }
 
     @Override protected void init() {
+        super.init();
         int x = left(), y = top();
         name = new EditBox(font, x + 49, y + 28, 119, 18,
             Component.literal("分类名称"));
@@ -76,7 +82,7 @@ public final class CardEditorScreen extends Screen {
             this::toggleFuzzy);
         addButton(x + 11, y + 237, 166, 19, "清空参考物品",
             "仅清除参考物品，不删除已添加的规则",
-            () -> { sample = ItemStack.EMPTY; refreshOptions(); rebuildWidgets(); });
+            this::clearReference);
 
         FilterCategory.Mode currentMode = hasCategory()
             ? current().mode() : FilterCategory.Mode.ANY;
@@ -285,11 +291,13 @@ public final class CardEditorScreen extends Screen {
     }
 
     private void setSample(ItemStack next) {
-        if (!commitName()) return;
+        if (ItemStack.matches(sample, next)) return;
+        String pendingName = name == null ? null : name.getValue();
         sample = next.isEmpty() ? ItemStack.EMPTY : next.copyWithCount(1);
         attributePage = 0;
         refreshOptions();
         rebuildWidgets();
+        if (pendingName != null && hasCategory()) name.setValue(pendingName);
         message(sample.isEmpty() ? "参考槽已清空"
             : "已放入参考物品：" + sample.getHoverName().getString(), false);
     }
@@ -367,56 +375,43 @@ public final class CardEditorScreen extends Screen {
     private void saveCard() {
         if (!commitName()) return;
         try {
-            PacketDistributor.sendToServer(new SaveCardPayload(CardWireCodec.encode(working)));
-            onClose();
+            PacketDistributor.sendToServer(new SaveCardPayload(menu.containerId, CardWireCodec.encode(working)));
         } catch (RuntimeException ex) {
             message("保存失败：" + ex.getMessage(), true);
         }
     }
 
-    private int backpackIndex(double mouseX, double mouseY) {
-        int dx = (int)Math.floor(mouseX - left() - 11);
-        int dy = (int)Math.floor(mouseY - top() - 137);
-        if (dx < 0 || dy < 0 || dx >= 162 || dy >= 72) return -1;
-        return (dy / 18) * 9 + (dx / 18);
-    }
-    private boolean onSampleSlot(double mouseX, double mouseY) {
-        return mouseX >= left()+18 && mouseX < left()+42 &&
-               mouseY >= top()+76 && mouseY < top()+100;
+    private void clearReference() {
+        if (minecraft == null || minecraft.gameMode == null || minecraft.player == null) return;
+        minecraft.gameMode.handleInventoryMouseClick(menu.containerId,
+            CardEditorMenu.REFERENCE_SLOT, 0, ClickType.PICKUP, minecraft.player);
+        setSample(menu.referenceItem());
     }
 
-    @Override public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (super.mouseClicked(mouseX, mouseY, button)) return true;
-        if (onSampleSlot(mouseX, mouseY)) {
-            var player = Minecraft.getInstance().player;
-            ItemStack carried = player == null ? ItemStack.EMPTY
-                : player.containerMenu.getCarried();
-            if (!carried.isEmpty()) setSample(carried);
-            else if (!dragged.isEmpty()) setSample(dragged);
-            else if (!sample.isEmpty()) setSample(ItemStack.EMPTY);
-            return true;
+    @Override protected void containerTick() {
+        super.containerTick();
+        setSample(menu.referenceItem());
+    }
+
+    @Override protected void slotClicked(Slot slot, int slotId, int button, ClickType type) {
+        super.slotClicked(slot, slotId, button, type);
+        if (slot != null && menu.isPlayerSlot(slotId) && button == 0 && type == ClickType.PICKUP) {
+            // Cosmetic drag only: the real menu cursor never receives this copy.
+            dragged = slot.getItem().copyWithCount(1);
         }
-        int index = backpackIndex(mouseX, mouseY);
-        if (index < 0 || button != 0) return false;
-        var player = Minecraft.getInstance().player;
-        if (player == null || player.getInventory().items.size() <= index) return false;
-        ItemStack item = player.getInventory().items.get(index);
-        if (item.isEmpty()) return true;
-        dragged = item.copyWithCount(1);
-        // One click picks a ghost sample; drag-and-release into the above slot
-        // works as well. Never remove anything from the actual inventory.
-        setSample(dragged);
-        return true;
+        setSample(menu.referenceItem());
     }
 
     @Override public boolean mouseReleased(double mouseX, double mouseY, int button) {
         boolean result = super.mouseReleased(mouseX, mouseY, button);
-        if (button == 0 && !dragged.isEmpty()) {
-            if (onSampleSlot(mouseX, mouseY)) setSample(dragged);
-            dragged = ItemStack.EMPTY;
-            return true;
-        }
+        dragged = ItemStack.EMPTY;
         return result;
+    }
+
+    @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (name != null && name.isFocused() && keyCode != 256)
+            return name.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override public boolean mouseScrolled(double mouseX, double mouseY,
@@ -429,10 +424,12 @@ public final class CardEditorScreen extends Screen {
         return super.mouseScrolled(mouseX, mouseY, deltaX, deltaY);
     }
 
-    @Override public void render(GuiGraphics g, int mx, int my, float tick) {
-        // Do not call renderBackground(): vanilla blurs the game and can cause
-        // the old GUI beneath this editor to appear as blurry ghost text.
+    @Override public void renderBackground(GuiGraphics g, int mx, int my, float tick) {
+        // Keep the existing non-blurred background when using a container screen.
         g.fill(0, 0, width, height, 0xA8000000);
+    }
+
+    @Override protected void renderBg(GuiGraphics g, float tick, int mx, int my) {
         int x = left(), y = top();
         g.fill(x-4, y-4, x+W+4, y+H+4, 0xFF151A20);
         g.fill(x+4, y+53, x+184, y+263, 0xFF252B31);
@@ -445,7 +442,6 @@ public final class CardEditorScreen extends Screen {
         g.drawString(font, "参考槽", x+48, y+81, 0xFFE1E4E6);
         g.fill(x+17,y+75,x+43,y+101,0xFF6B7680);
         g.fill(x+20,y+78,x+40,y+98,0xFF101417);
-        if (!sample.isEmpty()) g.renderItem(sample, x+22, y+80);
         if (hasCategory()) {
             ResourceLocation iconId = ResourceLocation.tryParse(current().iconItemId());
             ItemStack iconStack = iconId != null && BuiltInRegistries.ITEM.containsKey(iconId)
@@ -457,33 +453,28 @@ public final class CardEditorScreen extends Screen {
             x+11, y+109, 0xFFDEE4E9);
         g.drawString(font, "玩家背包（仅作参考，不消耗物品）",
             x+11, y+124, 0xFFADBBC7);
-        var player = Minecraft.getInstance().player;
-        if (player != null) {
-            int count = Math.min(36, player.getInventory().items.size());
-            for (int i=0;i<count;i++) {
-                ItemStack item = player.getInventory().items.get(i);
-                int ix=x+11+(i%9)*18, iy=y+137+(i/9)*18;
-                g.fill(ix,iy,ix+17,iy+17,0xFF414A52);
-                if (!item.isEmpty()) g.renderItem(item,ix,iy);
-            }
+        for (int i = 0; i < CardEditorMenu.PLAYER_SLOT_COUNT; i++) {
+            Slot slot = menu.getSlot(i);
+            int ix = x + slot.x, iy = y + slot.y;
+            g.fill(ix-1, iy-1, ix+17, iy+17, 0xFF414A52);
         }
         g.drawString(font, "过滤模式", x+191, y+46, 0xFFBFC9D1);
         g.drawString(font, "参考物品的属性", x+191, y+81, 0xFFE5E5E5);
         g.drawString(font, "已选条件 " + (hasCategory()?current().rules().size():0),
             x+191, y+193, 0xFFE5E5E5);
+    }
+
+    @Override protected void renderLabels(GuiGraphics g, int mx, int my) {
+        // Labels are drawn above with the existing layout.
+    }
+
+    @Override public void render(GuiGraphics g, int mx, int my, float tick) {
         super.render(g, mx, my, tick);
         if (!dragged.isEmpty()) g.renderItem(dragged, mx-8, my-8);
+        int x = left(), y = top();
         g.drawString(font, shorten(notice, 57), x+8, y+263,
             isError?0xFFFF7777:0xFF80D7AA);
-        if (player != null) {
-            int hover=backpackIndex(mx,my);
-            if (hover>=0 && hover<player.getInventory().items.size()) {
-                var item=player.getInventory().items.get(hover);
-                if (!item.isEmpty()) g.renderTooltip(font,item,mx,my);
-            }
-        }
-        if (onSampleSlot(mx,my) && !sample.isEmpty())
-            g.renderTooltip(font,sample,mx,my);
+        renderTooltip(g, mx, my);
     }
 
     @Override public boolean isPauseScreen() { return false; }

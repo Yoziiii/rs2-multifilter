@@ -1,6 +1,9 @@
 package dev.rs2multifilter.minecraft;
 
-import dev.rs2multifilter.minecraft.client.ClientEditorHook;
+import dev.rs2multifilter.core.CardWireCodec;
+import dev.rs2multifilter.minecraft.menu.CardEditorMenu;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
@@ -16,7 +19,17 @@ public final class FilterCardItem extends Item {
 
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
-        if (hand == InteractionHand.MAIN_HAND && level.isClientSide) ClientEditorHook.open(player.getMainHandItem());
+        if (hand == InteractionHand.MAIN_HAND && player instanceof ServerPlayer serverPlayer) {
+            ItemStack card = player.getMainHandItem();
+            int cardSlot = player.getInventory().selected;
+            String initial = CardWireCodec.encode(CardComponents.read(card));
+            serverPlayer.openMenu(new SimpleMenuProvider(
+                (id, inventory, owner) -> new CardEditorMenu(id, inventory, cardSlot, card),
+                Component.literal("过滤升级")), buffer -> {
+                    buffer.writeVarInt(cardSlot);
+                    buffer.writeUtf(initial, CardWireCodec.MAX_ENCODED_CHARS);
+                });
+        }
         return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide());
     }
 
