@@ -115,10 +115,23 @@ class CardEditorScreenInteractionTest {
 
     @Test void toolbarUsesPixelIconsWithAccessibleNamesAndUnchangedActions() {
         var toolbar = screen.children().stream().filter(EditorButton.class::isInstance)
-            .map(EditorButton.class::cast).toList();
+            .map(EditorButton.class::cast).filter(b -> !(b instanceof AttributeSelector)).toList();
         assertFalse(toolbar.isEmpty());
         assertTrue(toolbar.stream().allMatch(b -> b.icon() != null));
         assertTrue(toolbar.stream().allMatch(b -> !b.getMessage().getString().isBlank()));
+    }
+
+    @Test void deletingTheLastCategorySurvivesResizeAndReopeningCreatesOnlyOneDefault() throws Exception {
+        invoke("deleteCategory");
+        assertTrue(((FilterCard) field("working")).categories().isEmpty());
+        screen.init();
+        assertTrue(((FilterCard) field("working")).categories().isEmpty());
+        var savedEmpty = CardWireCodec.decode(CardWireCodec.encode((FilterCard) field("working")));
+        when(menu.initialCard()).thenReturn(savedEmpty);
+        var reopened = new CardEditorScreen(menu, new Inventory(mock(Player.class)), Component.literal("过滤升级"));
+        var working = CardEditorScreen.class.getDeclaredField("working");
+        working.setAccessible(true);
+        assertEquals(1, ((FilterCard) working.get(reopened)).categories().size());
     }
 
     @Test void wheelOverInventoryOrButtonsCannotChangeAttributes() throws Exception {

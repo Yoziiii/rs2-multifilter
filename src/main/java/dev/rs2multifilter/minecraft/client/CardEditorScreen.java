@@ -566,7 +566,7 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         g.fill(x - 1, y - 1, x + 17, y + 17, 0xFFF3F1E9);
         g.fill(x - 1, y - 1, x + 17, y, 0xFF4A4944);
         g.fill(x - 1, y - 1, x, y + 17, 0xFF4A4944);
-        g.fill(x, y, x + 16, y + 16, 0xFF8B8B85);
+        g.fill(x, y, x + 16, y + 16, 0xFF8B8B8B);
     }
 
     @Override protected void renderLabels(GuiGraphics g, int mx, int my) {}

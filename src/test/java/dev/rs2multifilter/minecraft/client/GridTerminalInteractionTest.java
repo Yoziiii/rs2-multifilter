@@ -148,7 +148,7 @@ class GridTerminalInteractionTest {
         }
     }
 
-    @Test void attachedSlotsDrawOpaqueGrayBelowItemsAndBackgroundMixinIsApplied() throws Exception {
+    @Test void attachedSlotsDrawOpaqueGrayAndMatchTheNativeBackgroundHook() throws Exception {
         var screen = mock(AbstractGridScreen.class);
         when(screen.getGuiLeft()).thenReturn(50);
         when(screen.getGuiTop()).thenReturn(30);
@@ -159,8 +159,18 @@ class GridTerminalInteractionTest {
             verify(graphics).fill(x, y, x + 16, y + 16, 0xFF8B8B8B);
         }
         var target = Class.forName("com.refinedmods.refinedstorage.common.support.stretching.AbstractStretchingScreen");
-        assertTrue(Arrays.stream(target.getDeclaredMethods()).anyMatch(m -> m.getName().contains("rs2mf$panels")),
-            "The actual RS background class must include our injected callback");
+        assertEquals(void.class, target.getDeclaredMethod("renderBg", GuiGraphics.class,
+            float.class, int.class, int.class).getReturnType());
+        // NeoForge JUnit runs on the server distribution: client-only mixins
+        // cannot be claimed as runtime-tested by this test suite.
+        assertEquals(net.neoforged.api.distmarker.Dist.DEDICATED_SERVER,
+            net.neoforged.fml.loading.FMLEnvironment.dist);
+        try (var resource = getClass().getClassLoader().getResourceAsStream("rs2multifilter.mixins.json")) {
+            assertNotNull(resource);
+            var config = com.google.gson.JsonParser.parseString(new String(resource.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+            assertTrue(config.getAsJsonObject().getAsJsonArray("client").asList().stream()
+                .anyMatch(entry -> entry.getAsString().equals("GridPanelBackgroundMixin")));
+        }
     }
 
     @Test void fullInventoryKeepsAllFourCardsAndRetryCannotDuplicateThem() {
