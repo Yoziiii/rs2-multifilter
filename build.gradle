@@ -18,6 +18,10 @@ neoForge {
     mods {
         rs2multifilter { sourceSet sourceSets.main }
     }
+    unitTest {
+        enable()
+        testedMod = mods.rs2multifilter
+    }
 }
 
 repositories {

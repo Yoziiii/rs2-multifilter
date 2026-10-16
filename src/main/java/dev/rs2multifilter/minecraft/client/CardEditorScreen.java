@@ -427,6 +427,7 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
     @Override public void renderBackground(GuiGraphics g, int mx, int my, float tick) {
         // Keep the existing non-blurred background when using a container screen.
         g.fill(0, 0, width, height, 0xA8000000);
+        renderBg(g, tick, mx, my);
     }
 
     @Override protected void renderBg(GuiGraphics g, float tick, int mx, int my) {

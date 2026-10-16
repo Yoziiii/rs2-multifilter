@@ -24,6 +24,15 @@ jobs:
           gradle-version: '8.14'
       - name: Compile and test
         run: gradle build --stacktrace
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            build/test-results/test/
+            build/reports/tests/test/
+          if-no-files-found: ignore
       - name: Verify packaged NeoForge mod
         run: |
           JAR=$(find build/libs -maxdepth 1 -type f -name 'rs2multifilter-*.jar' | head -n 1)
