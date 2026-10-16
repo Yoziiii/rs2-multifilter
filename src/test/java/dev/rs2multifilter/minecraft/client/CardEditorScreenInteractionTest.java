@@ -29,6 +29,8 @@ class CardEditorScreenInteractionTest {
     private CardEditorScreen screen;
     private FilterCard initial;
     private CardEditorMenu menu;
+    private net.minecraft.client.KeyboardHandler keyboard;
+    private Font font;
 
     @BeforeAll static void bootstrapMinecraft() {
         SharedConstants.tryDetectVersion();
@@ -44,7 +46,7 @@ class CardEditorScreenInteractionTest {
         when(menu.initialCard()).thenReturn(initial);
         var inventory = new Inventory(mock(Player.class));
         screen = new CardEditorScreen(menu, inventory, Component.literal("编辑"));
-        var font = mock(Font.class);
+        font = mock(Font.class);
         when(font.width(anyString())).thenAnswer(call -> call.<String>getArgument(0).length() * 6);
         when(font.plainSubstrByWidth(anyString(), anyInt())).thenAnswer(call -> {
             String text = call.getArgument(0);
@@ -57,6 +59,10 @@ class CardEditorScreenInteractionTest {
         // Supply that context without starting a window or touching the clipboard.
         var client = mock(Minecraft.class);
         when(client.getLastInputType()).thenReturn(InputType.MOUSE);
+        keyboard = mock(net.minecraft.client.KeyboardHandler.class);
+        var keyboardField = Minecraft.class.getDeclaredField("keyboardHandler");
+        keyboardField.setAccessible(true);
+        keyboardField.set(client, keyboard);
         Field clientField = Screen.class.getDeclaredField("minecraft");
         clientField.setAccessible(true);
         clientField.set(screen, client);
@@ -265,6 +271,42 @@ class CardEditorScreenInteractionTest {
         int y = (screen.height - CardEditorLayout.HEIGHT) / 2 + r.y();
         return screen.children().stream().filter(c -> c instanceof EditorButton)
             .map(EditorButton.class::cast).filter(b -> b.getX() == x && b.getY() == y).reduce((a, b) -> b).orElseThrow();
+    }
+
+    @Test void candidateRightClickUsesTheRealClipboardCallbackAndReportsSuccess() throws Exception {
+        var selector = (AttributeSelector) field("selector");
+        selector.mouseScrolled(selector.getX() + 1, selector.getY() + 1, 0, -1);
+        selector.mouseClicked(selector.getX() + 1, selector.getY() + 1, 1);
+        var copied = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(keyboard).setClipboard(copied.capture());
+        assertTrue(copied.getValue().contains("#create:handheld_in_deployer_use"));
+        assertTrue(copied.getValue().contains("词条类型：物品标签"));
+        assertEquals("已复制", field("notice"));
+        assertEquals(initial, field("working"));
+        assertEquals(1, field("attributeIndex"));
+    }
+
+    @Test void inlineRuleRightClickCopiesDirectionAndFullValueWithoutDeleting() throws Exception {
+        var area = (CardEditorLayout.Rect) field("ruleArea");
+        screen.mouseClicked(area.x() + 3, area.y() + 3, 1);
+        screen.mouseReleased(area.x() + 3, area.y() + 3, 1);
+        var copied = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(keyboard).setClipboard(copied.capture());
+        assertTrue(copied.getValue().contains("规则方向：排除"));
+        assertTrue(copied.getValue().contains("完整内部值：test:tag_0"));
+        assertTrue(copied.getValue().contains("显示名称：标签：test:tag_0"));
+        assertEquals(initial, field("working"));
+    }
+
+    @Test void hoverRenderingPassesMultipleReadableLinesToTheMinecraftTooltipRenderer() throws Exception {
+        when(font.split(any(net.minecraft.network.chat.FormattedText.class), anyInt())).thenAnswer(call ->
+            List.of(net.minecraft.util.FormattedCharSequence.forward(
+                call.<net.minecraft.network.chat.FormattedText>getArgument(0).getString(), net.minecraft.network.chat.Style.EMPTY)));
+        var graphics = mock(net.minecraft.client.gui.GuiGraphics.class);
+        var selector = (AttributeSelector) field("selector");
+        int x = selector.getX() + 2, y = selector.getY() + 2;
+        screen.renderTooltip(graphics, x, y);
+        verify(graphics).renderTooltip(eq(font), argThat((List<net.minecraft.util.FormattedCharSequence> lines) -> lines.size() >= 4), eq(x), eq(y));
     }
 
     private Object field(String name) throws Exception {
