@@ -59,7 +59,7 @@ public final class GridTabs {
         GridFilterSession session = old == null ? GridFilterSession.attach(screen.getMenu(), selection.card()) : old.session;
         session.updateCard(selection.card());
         session.select(selection.selected());
-        int x = screen.getGuiLeft() + 4, y = Math.max(2, screen.getGuiTop() - 23) + 3;
+        int x = screen.getGuiLeft() + 4, y = Math.max(0, screen.getGuiTop() - 23) + 3;
         int width = barWidth(screen) - 8;
         var font = Minecraft.getInstance().font;
         CategoryNavigation[] navigation = {new CategoryNavigation(selection.card().categories().stream()
@@ -128,6 +128,12 @@ public final class GridTabs {
         int nativeWidth = screen.getXSize() > 0 ? screen.getXSize() : 193;
         return screen.width > 0 ? Math.min(nativeWidth, Math.max(120, screen.width - screen.getGuiLeft() - 2)) : nativeWidth;
     }
+    /** Reserve room for the attached header when RS's minimum 3 rows would overlap it. */
+    public static int fitRows(int nativeRows, int viewportHeight, int bottomHeight) {
+        int rows = Math.max(1, nativeRows);
+        while (rows > 1 && (viewportHeight - 19 - 18 * rows - bottomHeight) / 2 < 23) rows--;
+        return rows;
+    }
     private static ItemStack iconFor(String id) {
         ResourceLocation key = ResourceLocation.tryParse(id);
         return key != null && BuiltInRegistries.ITEM.containsKey(key)
@@ -135,7 +141,7 @@ public final class GridTabs {
     }
     /** Called after RS paints its background, BEFORE vanilla draws slot items. */
     public static boolean isCategoryStripAt(AbstractGridScreen<?> screen, double mx, double my) {
-        int x = screen.getGuiLeft(), y = Math.max(2, screen.getGuiTop() - 23);
+        int x = screen.getGuiLeft(), y = Math.max(0, screen.getGuiTop() - 23);
         return mx >= x && mx < x + barWidth(screen) && my >= y && my < y + 24;
     }
 
@@ -144,7 +150,7 @@ public final class GridTabs {
         // The unmodified RS upgrade panel is exactly 30x82 at UV 180,0.
         // Its 4 opaque slots align with the existing menu at 204,6 + n*18.
         g.blit(RsUi.FILTER, x + 197, y, 180, 0, 30, 82);
-        RsUi.panel(g, x, Math.max(2, y - 23), barWidth(screen), 24);
+        RsUi.panel(g, x, Math.max(0, y - 23), barWidth(screen), 24);
     }
     @SubscribeEvent public static void onScreenRender(ScreenEvent.Render.Post event) {
         if (!(event.getScreen() instanceof AbstractGridScreen<?> screen)) return;

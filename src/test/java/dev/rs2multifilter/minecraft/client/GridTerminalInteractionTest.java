@@ -251,6 +251,24 @@ class GridTerminalInteractionTest {
         assertFalse(GridTabs.isCategoryStripAt(screen, 50, 7));
         assertTrue(GridTabs.isCategoryStripAt(screen, 100, 37));
     }
+    @Test void nativeSidebarButtonTogglesAndPersistsMemoryWithoutChangingTheCurrentFilter() {
+        var path = settingsDirectory.resolve("sidebar.properties");
+        var preferences = new GridPreferences(path);
+        var card = FilterCard.blank().withCategory(new FilterCategory("分类1", "minecraft:paper", List.of()));
+        var selection = new GridCategoryState(preferences, "world");
+        selection.synchronize(card, true);
+        selection.choose(0);
+        var button = new RememberCategoryButton(selection);
+        button.onPress();
+        assertTrue(button.getSubText().getFirst().getString().contains("关闭"));
+        assertEquals(0, selection.selected());
+        assertFalse(new GridPreferences(path).remembersCategory());
+        assertEquals(-1, new GridPreferences(path).restore("world", card));
+        button.onPress();
+        assertTrue(button.getSubText().getFirst().getString().contains("开启"));
+        assertEquals(0, new GridPreferences(path).restore("world", card));
+        assertEquals(card, selection.card());
+    }
 
     @Test void fullInventoryKeepsAllFourCardsAndRetryCannotDuplicateThem() {
         for (int i = 0; i < 36; i++) inventory.setItem(i, new ItemStack(Items.STONE, 64));

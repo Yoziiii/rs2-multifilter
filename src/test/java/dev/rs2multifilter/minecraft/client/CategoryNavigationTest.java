@@ -63,4 +63,18 @@ class CategoryNavigationTest {
         assertEquals(-1, nav.tabs(0).getFirst().category());
         assertFalse(nav.paginated());
     }
+    @Test void smallGuiScalesReserveHeaderSpaceWithoutOverlappingTheNativeTitle() {
+        for (int height : new int[]{240, 270, 360, 540}) {
+            for (int bottom : new int[]{99, 156}) {
+                int original = Math.max(3, Math.min(12, (height - 19 - bottom) / 18 - 3));
+                int rows = GridTabs.fitRows(original, height, bottom);
+                assertTrue(rows >= 1 && rows <= original);
+                int top = (height - 19 - rows * 18 - bottom) / 2;
+                assertTrue(top >= 23);
+                assertTrue(Math.max(0, top - 23) + 24 <= top + 1);
+            }
+        }
+        assertEquals(1, GridTabs.fitRows(3, 240, 156));
+        assertEquals(2, GridTabs.fitRows(3, 270, 156));
+    }
 }
