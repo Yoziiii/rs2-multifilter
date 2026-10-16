@@ -453,6 +453,10 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
     }
 
     @Override public boolean mouseClicked(double mx, double my, int button) {
+        if (button == 1 && selector != null && selector.mouseClicked(mx, my, button)) {
+            ruleMouseDown = true;
+            return true;
+        }
         if (new Rect(left() + RULE_PANEL.x(), top() + RULE_PANEL.y(), RULE_PANEL.width(), RULE_PANEL.height()).contains(mx, my)) {
             ruleMouseDown = true;
             for (var widget : ruleWidgets) if (widget.mouseClicked(mx, my, button)) return true;

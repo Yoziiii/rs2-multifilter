@@ -276,7 +276,8 @@ class CardEditorScreenInteractionTest {
     @Test void candidateRightClickUsesTheRealClipboardCallbackAndReportsSuccess() throws Exception {
         var selector = (AttributeSelector) field("selector");
         selector.mouseScrolled(selector.getX() + 1, selector.getY() + 1, 0, -1);
-        selector.mouseClicked(selector.getX() + 1, selector.getY() + 1, 1);
+        assertTrue(screen.mouseClicked(selector.getX() + 1, selector.getY() + 1, 1));
+        assertTrue(screen.mouseReleased(selector.getX() + 1, selector.getY() + 1, 1));
         var copied = org.mockito.ArgumentCaptor.forClass(String.class);
         verify(keyboard).setClipboard(copied.capture());
         assertTrue(copied.getValue().contains("#create:handheld_in_deployer_use"));
@@ -284,6 +285,7 @@ class CardEditorScreenInteractionTest {
         assertEquals("已复制", field("notice"));
         assertEquals(initial, field("working"));
         assertEquals(1, field("attributeIndex"));
+        verify(menu, never()).clicked(anyInt(), anyInt(), any(), any());
     }
 
     @Test void inlineRuleRightClickCopiesDirectionAndFullValueWithoutDeleting() throws Exception {
