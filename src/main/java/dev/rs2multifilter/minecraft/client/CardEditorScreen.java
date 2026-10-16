@@ -98,7 +98,7 @@ public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMe
         modeButton(DENY, "非", FilterCategory.Mode.DENY, mode,
             "黑名单：匹配普通词条的物品会被排除；排除词条始终排除");
         var fuzzyButton = button(FUZZY, fuzzy ? "模糊" : "精确",
-            "模糊忽略附魔、耐久与组件；精确比较组件。沿用已有规则转换行为", this::toggleFuzzy);
+            "模糊：忽略附魔、耐久等数据；精确：这些数据必须相同。切换会转换已有物品规则", this::toggleFuzzy);
         fuzzyButton.setSelected(fuzzy);
         button(ICON, "图标", "将参考物品设为当前分类图标", this::useSampleAsIcon)
             .active = hasCategory() && !sample.isEmpty();
