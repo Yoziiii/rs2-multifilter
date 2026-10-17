@@ -9,7 +9,6 @@
   },
   "client": [
     "GridSearchMixin",
-    "RepositorySuspensionMixin",
     "GridPanelBackgroundMixin",
     "GridSlotOutsideClickMixin"
   ],
@@ -20,6 +19,7 @@
     "ResourceMenuSlotInvoker",
     "GridNativeSlotsMixin",
     "GridCardQuickMoveMixin",
-    "RepositoryFilterAccessor"
+    "RepositoryFilterAccessor",
+    "RepositorySuspensionMixin"
   ]
 }

@@ -53,7 +53,10 @@ class UnavailableAttributeTest {
     static FilterRule attribute(String id,boolean exclude){return new FilterRule(FilterRule.Kind.CREATE_ATTRIBUTE,encoded(id),exclude);}
     static FilterRule stone(){return new FilterRule(FilterRule.Kind.ITEM,"minecraft:stone",false);}
     static FilterCategory category(String name,FilterCategory.Mode mode,FilterRule...rules){return new FilterCategory(name,"minecraft:stone",List.of(rules),mode);}
-    void use(FilterCategory...categories){session=GridFilterSession.attach(menu,new FilterCard(FilterCard.VERSION,List.of(categories)));}
+    void use(FilterCategory...categories){
+        if(session!=null){session.select(-1);GridFilterSession.detach(menu);}
+        session=GridFilterSession.attach(menu,new FilterCard(FilterCard.VERSION,List.of(categories)));
+    }
     Set<Item> visible(){return menu.getRepository().getViewList().stream().map(r->((ItemGridResource)r).getItemStack().getItem()).collect(java.util.stream.Collectors.toSet());}
     void register(String id,java.util.function.BiPredicate<ItemStack,net.minecraft.world.level.Level> predicate){ItemAttribute.Fixture.registered.put(id,new ItemAttribute.TestAttribute(predicate));}
 
@@ -247,5 +250,13 @@ class UnavailableAttributeTest {
         retryDuringNormalScreenMaintenance();assertTrue(session.isSuspended());assertTrue(visible().isEmpty());
         register("test:outage",(s,l)->true);retryDuringNormalScreenMaintenance();
         assertFalse(session.isSuspended());assertEquals(Set.of(Items.STONE),visible());
+    }
+    @Test void repositorySafetyCallbackIsActuallyInjectedAndOrdinaryFiltersAreUnaffected(){
+        assertTrue(Arrays.stream(menu.getRepository().getClass().getDeclaredMethods())
+            .anyMatch(m->m.getName().contains("rs2mf$guardSortedView")),"The real RS sort callback must be injected");
+        menu.getRepository().setFilterAndSort((repo,item)->((ItemGridResource)item).getItemStack().is(Items.APPLE));
+        assertEquals(Set.of(Items.APPLE),visible());
+        menu.getRepository().update(new ItemResource(Items.DIRT),1);
+        assertEquals(Set.of(Items.APPLE),visible());
     }
 }

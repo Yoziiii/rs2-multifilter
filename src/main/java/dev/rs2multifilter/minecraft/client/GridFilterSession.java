@@ -3,6 +3,7 @@ package dev.rs2multifilter.minecraft.client;
 import dev.rs2multifilter.core.FilterCard;
 import dev.rs2multifilter.core.FilterCategory;
 import dev.rs2multifilter.core.FilterRule;
+import dev.rs2multifilter.core.SuspendedFilter;
 import com.refinedmods.refinedstorage.api.resource.repository.ResourceRepositoryFilter;
 import com.refinedmods.refinedstorage.common.api.grid.view.GridResource;
 import com.refinedmods.refinedstorage.common.grid.AbstractGridContainerMenu;
@@ -194,25 +195,16 @@ public final class GridFilterSession {
             Component.literal(ownerName(owner)+"属性检查恢复，已重新执行原始规则。"),false);
     }
 
-    /** Only our suspended filter may discard its cached view. Never clear the backing inventory.
-     * Called after RS builds a view / completes an incremental update, before control returns. */
-    public static void guardRepository(ResourceRepository<?> repository) {
-        if(!(repository instanceof RepositoryFilterAccessor accessor)) return;
-        var filter=accessor.rs2multifilter$getFilter();
-        if(filter instanceof GridFilterSession.CardFilter guarded && guarded.paused()
-                && !repository.getViewList().isEmpty()) repository.sort();
-    }
-
-    private final class CardFilter implements ResourceRepositoryFilter<GridResource> {
+    private final class CardFilter implements ResourceRepositoryFilter<GridResource>, SuspendedFilter {
         private final ClientCardState.Source owner;
         private final FilterCategory category;
         private final ResourceRepositoryFilter<GridResource> nativeFilter;
         CardFilter(ClientCardState.Source owner,FilterCategory category,ResourceRepositoryFilter<GridResource> nativeFilter) {
             this.owner=owner;this.category=category;this.nativeFilter=nativeFilter;
         }
-        boolean paused() { return suspended.containsKey(owner); }
+        @Override public boolean suspended() { return suspended.containsKey(owner); }
         @Override public boolean test(ResourceRepository<GridResource> repo,GridResource resource) {
-            return !paused() && nativeFilter.test(repo,resource) && matches(owner,category,resource);
+            return !suspended() && nativeFilter.test(repo,resource) && matches(owner,category,resource);
         }
     }
 

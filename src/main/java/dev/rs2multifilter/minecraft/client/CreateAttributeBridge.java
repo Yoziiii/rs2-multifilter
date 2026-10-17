@@ -116,8 +116,8 @@ public final class CreateAttributeBridge {
     }
 
     public static AttributeResult evaluate(String encoded, ItemStack stack) {
-        Level level = Minecraft.getInstance().level;
         try {
+            Level level = Minecraft.getInstance().level;
             if (level == null) throw new IllegalStateException("当前世界不可用");
             Object attr = CACHE.get(encoded);
             if (attr == null) attr = load(encoded, level);
