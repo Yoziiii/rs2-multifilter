@@ -82,10 +82,10 @@ public final class GridTabs {
         }
         var previous = Button.builder(Component.literal("<"),
             b -> { page[0] = navigation[0].clamp(page[0] - 1); refresh[0].run(); })
-            .bounds(x + navigation[0].previousX(), y + 3, 16, 18).build();
+            .bounds(x + navigation[0].previousX(), y + 3, CategoryNavigation.ARROW_WIDTH, 18).build();
         var next = Button.builder(Component.literal(">"),
             b -> { page[0] = navigation[0].clamp(page[0] + 1); refresh[0].run(); })
-            .bounds(x + navigation[0].nextX(), y + 3, 16, 18).build();
+            .bounds(x + navigation[0].nextX(), y + 3, CategoryNavigation.ARROW_WIDTH, 18).build();
         event.addListener(previous);
         event.addListener(next);
         refresh[0] = () -> {
@@ -103,6 +103,7 @@ public final class GridTabs {
                 if (!button.visible) continue;
                 var tab = shown.get(i);
                 button.category = tab.category();
+                button.terminalLeft = x;
                 button.chosen = tab.category() == selection.selected();
                 button.setX(x + tab.x());
                 button.setWidth(tab.width());
@@ -169,6 +170,7 @@ public final class GridTabs {
     private static final class TabButton extends EditorButton {
         ItemStack icon = ItemStack.EMPTY;
         int category = -1;
+        int terminalLeft;
         boolean chosen;
         TabButton(int x, int y, OnPress press) {
             super(x, y, CategoryNavigation.TAB_WIDTH, CategoryNavigation.TAB_HEIGHT, Component.literal("全部"), press);
@@ -178,7 +180,7 @@ public final class GridTabs {
             g.pose().translate(0, 0, 1);
             // Paint after the terminal background: the selected tab's open base
             // bridges only its own part of the terminal's four-pixel top edge.
-            RsUi.iconTab(g, getX(), getY(), chosen);
+            RsUi.iconTab(g, getX(), getY(), chosen, terminalLeft);
             g.renderItem(icon, getX() + 5, getY() + (chosen ? 5 : 6));
             g.pose().popPose();
             // Message is narration/tooltip data only; no label is drawn inside a tab.

@@ -44,7 +44,7 @@ public final class ClientStartupProbe {
             client.resizeDisplay();
             return;
         }
-        int scale = previewIndex < 4 ? 2 : 3;
+        int scale = previewIndex < CreativeTabPreview.CASES ? 2 : 3;
         if (Math.abs(client.getWindow().getGuiScale() - scale) > 0.01) {
             if (++scaleWaitFrames > 30) throw new IllegalStateException("Cannot reach GUI scale " + scale);
             client.options.guiScale().set(scale);
@@ -54,8 +54,8 @@ public final class ClientStartupProbe {
         scaleWaitFrames = 0;
         vanilla.renderWidget(event.getGuiGraphics(), 0, 0, 0);
         name.renderWidget(event.getGuiGraphics(), 0, 0, 0);
-        CreativeTabPreview.capture(event.getGuiGraphics(), scale, previewIndex % 4);
-        if (++previewIndex < 8) return;
+        CreativeTabPreview.capture(event.getGuiGraphics(), scale, previewIndex % CreativeTabPreview.CASES);
+        if (++previewIndex < 2 * CreativeTabPreview.CASES) return;
         passed = true;
         System.out.println("RS2MF_CLIENT_SMOKE_TITLE_READY_EDITBOX_OK");
         System.out.println("RS2MF_CATEGORY_ALIGNMENT_SCALES_OK");

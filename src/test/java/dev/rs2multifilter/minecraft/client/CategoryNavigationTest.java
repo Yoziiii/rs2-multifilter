@@ -98,17 +98,17 @@ class CategoryNavigationTest {
             assertEquals(2, nav.tabs(0).get(i).x() - nav.tabs(0).get(i - 1).x() - nav.tabs(0).get(i - 1).width());
     }
 
-    @Test void overflowReservesTwoUnchangedArrowsAndFitsSixCustomCategories() {
+    @Test void overflowAlignsBothArrowsWithTheUpgradePanelAndKeepsSixCustomCategories() {
         var nav = new CategoryNavigation(IntStream.range(0, 8).mapToObj(i -> "C" + i).toList(), String::length, GridTabs.HEADER_WIDTH);
         assertTrue(nav.paginated());
         assertEquals(2, nav.count());
         assertEquals(List.of(-1, 0, 1, 2, 3, 4, 5), nav.tabs(0).stream().map(CategoryNavigation.Tab::category).toList());
         assertEquals(List.of(-1, 6, 7), nav.tabs(1).stream().map(CategoryNavigation.Tab::category).toList());
         assertEquals(194, nav.tabs(0).getLast().x() + nav.tabs(0).getLast().width());
-        assertEquals(195, nav.previousX());
-        assertEquals(211, nav.nextX());
-        assertEquals(227, nav.nextX() + 16);
-        assertEquals(1, nav.previousX() - 194);
+        assertEquals(197, nav.previousX());
+        assertEquals(212, nav.nextX());
+        assertEquals(227, nav.nextX() + CategoryNavigation.ARROW_WIDTH);
+        assertEquals(3, nav.previousX() - 194);
     }
 
     @Test void fullAndPartialLastPagesNeverStretchOrRenumberTabs() {

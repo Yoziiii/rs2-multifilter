@@ -12,9 +12,70 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class CreativeTabRenderingTest {
+    private java.awt.image.BufferedImage resource(String path) throws Exception {
+        try (var stream = getClass().getClassLoader().getResourceAsStream(path)) {
+            assertNotNull(stream, path);
+            return ImageIO.read(stream);
+        }
+    }
+
+    /** Rasterize the actual blit calls against the actual RS corners. No screenshot estimate. */
+    private java.awt.image.BufferedImage joinedTab(int tabOffset, boolean selected) throws Exception {
+        var canvas = new java.awt.image.BufferedImage(260, 80, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        var paint = canvas.createGraphics();
+        paint.drawImage(resource("assets/refinedstorage/textures/gui/grid.png").getSubimage(0, 0, 193, 36), 10, 30, null);
+        paint.drawImage(resource("assets/refinedstorage/textures/gui/generic_filter.png").getSubimage(180, 0, 30, 36), 207, 30, null);
+        var graphics = mock(GuiGraphics.class);
+        doAnswer(call -> {
+            ResourceLocation id = call.getArgument(0);
+            var sprite = resource("assets/" + id.getNamespace() + "/textures/gui/sprites/" + id.getPath() + ".png");
+            int u = call.getArgument(3), v = call.getArgument(4);
+            int x = call.getArgument(5), y = call.getArgument(6);
+            int w = call.getArgument(7), h = call.getArgument(8);
+            paint.drawImage(sprite.getSubimage(u, v, w, h), x, y, null);
+            return null;
+        }).when(graphics).blitSprite(any(ResourceLocation.class), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt());
+        RsUi.iconTab(graphics, 10 + tabOffset, 7, selected, 10);
+        paint.dispose();
+        return canvas;
+    }
+
+    @Test void selectedAllKeepsTheNativeLeftVerticalEdgeInsteadOfFlaringOut() throws Exception {
+        var joined = joinedTab(0, true);
+        for (int y = 30; y < 36; y++) {
+            assertEquals(0xFF000000, joined.getRGB(10, y));
+            assertEquals(0xFFFFFFFF, joined.getRGB(11, y));
+            assertEquals(0xFFFFFFFF, joined.getRGB(12, y));
+            assertEquals(0, joined.getRGB(9, y));
+        }
+    }
+
+    @Test void selectedLastPagedTabCannotPaintOverTheTerminalRightCornerOrPanelGap() throws Exception {
+        var original = resource("assets/refinedstorage/textures/gui/grid.png");
+        for (boolean selected : new boolean[]{false, true}) {
+            var joined = joinedTab(168, selected);
+            for (int y = 0; y < 4; y++) {
+                for (int x = 189; x < 193; x++)
+                    assertEquals(original.getRGB(x, y), joined.getRGB(10 + x, 30 + y));
+                for (int x = 193; x < 197; x++) assertEquals(0, joined.getRGB(10 + x, 30 + y));
+            }
+        }
+    }
+
+    @Test void eighthTabKeepsTheUpgradePanelsLeftCornerAndTheGapIntact() throws Exception {
+        var original = resource("assets/refinedstorage/textures/gui/generic_filter.png");
+        var joined = joinedTab(196, true);
+        for (int y = 0; y < 4; y++) {
+            for (int x = 193; x < 197; x++) assertEquals(0, joined.getRGB(10 + x, 30 + y));
+            for (int x = 0; x < 4; x++)
+                assertEquals(original.getRGB(180 + x, y), joined.getRGB(207 + x, 30 + y));
+        }
+        assertEquals(0xFFC6C6C6, joined.getRGB(215, 33));
+    }
+
     @Test void selectedOpenBaseCoversOnlyItsOwnFourPixelsOfTheTerminalTopEdge() {
         var graphics = mock(GuiGraphics.class);
-        RsUi.iconTab(graphics, 50, 7, true); // Terminal top is 30.
+        RsUi.iconTab(graphics, 50, 7, true, 0); // Terminal top is 30.
         verify(graphics).blitSprite(RsUi.TAB_SELECTED, 26, 32, 0, 0, 50, 7, 26, 7);
         verify(graphics).blitSprite(RsUi.TAB_SELECTED, 26, 32, 0, 7, 50, 14, 26, 16);
         verify(graphics).blitSprite(RsUi.TAB_SELECTED, 26, 32, 0, 28, 50, 30, 26, 4);
@@ -24,7 +85,7 @@ class CreativeTabRenderingTest {
 
     @Test void unselectedUsesItsNativeBorderAndStopsBeforeTheTerminalTopEdge() {
         var graphics = mock(GuiGraphics.class);
-        RsUi.iconTab(graphics, 82, 7, false);
+        RsUi.iconTab(graphics, 82, 7, false, 0);
         verify(graphics).blitSprite(RsUi.TAB_UNSELECTED, 26, 32, 0, 0, 82, 7, 26, 7);
         verify(graphics).blitSprite(RsUi.TAB_UNSELECTED, 26, 32, 0, 7, 82, 14, 26, 12);
         verify(graphics).blitSprite(RsUi.TAB_UNSELECTED, 26, 32, 0, 28, 82, 26, 26, 4);

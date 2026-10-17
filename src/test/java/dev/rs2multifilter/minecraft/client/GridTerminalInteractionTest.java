@@ -261,7 +261,7 @@ class GridTerminalInteractionTest {
             verify(g).renderItem(argThat(s -> s.is(Items.STONE)), anyInt(), anyInt());
             verify(g, never()).drawString(any(net.minecraft.client.gui.Font.class), anyString(), anyInt(), anyInt(), anyInt(), anyBoolean());
             verify(g, never()).fill(anyInt(), anyInt(), anyInt(), anyInt(), anyInt());
-            verify(g).blitSprite(RsUi.TAB_SELECTED, 26, 32, 0, 28, 50, 30, 26, 4);
+            verify(g).blitSprite(RsUi.TAB_SELECTED_LEFT, 26, 32, 0, 28, 50, 30, 26, 4);
             verify(g).blitSprite(RsUi.TAB_UNSELECTED, 26, 32, 0, 28, 78, 26, 26, 4);
             assertEquals("只在悬停显示的完整名称", buttons.get(1).getMessage().getString());
             assertNotNull(buttons.get(1).getTooltip());
@@ -328,14 +328,16 @@ class GridTerminalInteractionTest {
                     verify(init, times(10)).addListener(captured.capture());
                     var buttons = captured.getAllValues().stream().map(Button.class::cast).toList();
                     assertEquals(left, buttons.getFirst().getX());
-                    assertEquals(left + 195, buttons.get(8).getX());
+                    assertEquals(left + 197, buttons.get(8).getX());
+                    assertEquals(30, buttons.get(8).getWidth() + buttons.get(9).getWidth());
+                    assertEquals(buttons.get(8).getX() + buttons.get(8).getWidth(), buttons.get(9).getX());
                     assertEquals(left + 227, buttons.get(9).getX() + buttons.get(9).getWidth());
                     assertTrue(buttons.get(8).visible);
                     assertEquals(7, buttons.subList(0, 8).stream().filter(b -> b.visible).count());
                     var graphics = mock(GuiGraphics.class);
                     when(graphics.pose()).thenReturn(new com.mojang.blaze3d.vertex.PoseStack());
                     ((EditorButton) buttons.getFirst()).renderWidget(graphics, -1, -1, 0);
-                    verify(graphics).blitSprite(RsUi.TAB_SELECTED, 26, 32, 0, 0, left, 7, 26, 7);
+                    verify(graphics).blitSprite(RsUi.TAB_SELECTED_LEFT, 26, 32, 0, 0, left, 7, 26, 7);
                     GridTabs.renderAttachedPanels(screen, graphics);
                     verify(graphics).blit(RsUi.FILTER, left + 197, 30, 180, 0, 30, 82);
                     assertTrue(GridTabs.isCategoryStripAt(screen, left + 226, 10));

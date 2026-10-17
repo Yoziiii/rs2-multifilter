@@ -8,6 +8,8 @@ public final class RsUi {
     public static final ResourceLocation FILTER = id("textures/gui/generic_filter.png");
     public static final ResourceLocation TAB_SELECTED = ResourceLocation.withDefaultNamespace(
         "container/creative_inventory/tab_top_selected_2");
+    public static final ResourceLocation TAB_SELECTED_LEFT = ResourceLocation.withDefaultNamespace(
+        "container/creative_inventory/tab_top_selected_1");
     public static final ResourceLocation TAB_UNSELECTED = ResourceLocation.withDefaultNamespace(
         "container/creative_inventory/tab_top_unselected_2");
     public static ResourceLocation id(String path) { return ResourceLocation.fromNamespaceAndPath("refinedstorage", path); }
@@ -34,11 +36,23 @@ public final class RsUi {
     /** Vanilla creative tabs, compacted vertically by skipping plain middle rows.
      * Keep native 26px artwork; callers own the tab's position and spacing.
      * Selected extends four pixels into the panel; unselected stops above it. */
-    public static void iconTab(GuiGraphics g, int x, int y, boolean selected) {
-        ResourceLocation sprite = selected ? TAB_SELECTED : TAB_UNSELECTED;
+    public static void iconTab(GuiGraphics g, int x, int y, boolean selected, int terminalLeft) {
+        ResourceLocation sprite = selected ? (x == terminalLeft ? TAB_SELECTED_LEFT : TAB_SELECTED) : TAB_UNSELECTED;
         int height = selected ? 27 : 23;
         g.blitSprite(sprite, 26, 32, 0, 0, x, y, 26, 7);
         g.blitSprite(sprite, 26, 32, 0, 7, x, y + 7, 26, height - 11);
-        g.blitSprite(sprite, 26, 32, 0, 28, x, y + height - 4, 26, 4);
+        if (!selected) {
+            g.blitSprite(sprite, 26, 32, 0, 28, x, y + height - 4, 26, 4);
+            return;
+        }
+        // Open the base only over a panel, never over its outer right border or
+        // the gap between panels. RS's native corners remain underneath intact.
+        // The first creative-tab sprite keeps the terminal's left vertical edge.
+        tabConnection(g, sprite, x, y + 23, terminalLeft, terminalLeft + 189);
+        tabConnection(g, sprite, x, y + 23, terminalLeft + 201, terminalLeft + 223);
+    }
+    private static void tabConnection(GuiGraphics g, ResourceLocation sprite, int x, int y, int left, int right) {
+        int start = Math.max(x, left), end = Math.min(x + 26, right);
+        if (start < end) g.blitSprite(sprite, 26, 32, start - x, 28, start, y, end - start, 4);
     }
 }

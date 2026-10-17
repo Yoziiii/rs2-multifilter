@@ -22,8 +22,11 @@ import java.util.stream.IntStream;
 /** CI-only render samples: actual tab widgets, not a simulated terminal session. */
 final class CreativeTabPreview {
     private static final ArrayList<Map<String, Object>> measurements = new ArrayList<>();
+    static final int CASES = 8;
     static void capture(GuiGraphics graphics, int scale, int scenario) {
-        int[] counts = {1, 7, 8, 13}, pages = {0, 0, 0, 2}, selected = {0, 6, 5, 12};
+        int[] counts = {1, 1, 7, 7, 8, 8, 13, 13};
+        int[] pages = {0, 0, 0, 0, 0, 0, 1, 2};
+        int[] selected = {-1, 0, 5, 6, -1, 5, 11, 12};
         var window = Minecraft.getInstance().getWindow();
         int x = (window.getGuiScaledWidth() - GridTabs.HEADER_WIDTH) / 2;
         int terminalY = (window.getGuiScaledHeight() - 82) / 2 + 12;
@@ -52,6 +55,7 @@ final class CreativeTabPreview {
             sample.put("upgradeRight", x + GridTabs.HEADER_WIDTH);
             sample.put("customCategories", counts[scenario]);
             sample.put("page", pages[scenario]);
+            sample.put("selected", selected[scenario]);
             measurements.add(sample);
             Files.writeString(Path.of("category-alignment-measurements.json"),
                 new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(measurements), StandardCharsets.UTF_8);
@@ -66,7 +70,8 @@ final class CreativeTabPreview {
         var navigation = new CategoryNavigation(names, String::length, GridTabs.HEADER_WIDTH);
         var font = Minecraft.getInstance().font;
         graphics.drawString(font, count + " categories / page " + (page + 1), x, terminalY - 36, 0xFFFFFF, false);
-        RsUi.panel(graphics, x, terminalY, 193, 36);
+        // Actual RS grid top corners, not a generic nine-sliced approximation.
+        graphics.blit(RsUi.id("textures/gui/grid.png"), x, terminalY, 0, 0, 193, 36);
         graphics.blit(RsUi.FILTER, x + 197, terminalY, 180, 0, 30, 82);
         graphics.drawString(font, "RS panel edge", x + 6, terminalY + 9, 0x404648, false);
         try {
@@ -75,11 +80,14 @@ final class CreativeTabPreview {
             constructor.setAccessible(true);
             var icon = type.getDeclaredField("icon");
             var chosen = type.getDeclaredField("chosen");
+            var terminalLeft = type.getDeclaredField("terminalLeft");
+            terminalLeft.setAccessible(true);
             icon.setAccessible(true);
             chosen.setAccessible(true);
             for (var tab : navigation.tabs(page)) {
                 var button = (Button) constructor.newInstance(x + tab.x(), terminalY - 23, (Button.OnPress) b -> {});
                 button.setWidth(tab.width());
+                terminalLeft.setInt(button, x);
                 icon.set(button, new ItemStack(tab.category() < 0 ? Items.GRASS_BLOCK
                     : tab.category() % 2 == 0 ? Items.COPPER_INGOT : Items.APPLE));
                 chosen.setBoolean(button, tab.category() == selected);
@@ -89,8 +97,8 @@ final class CreativeTabPreview {
             throw new IllegalStateException("Tab widget no longer matches the renderer test", error);
         }
         if (navigation.paginated()) {
-            var previous = Button.builder(Component.literal("<"), b -> {}).bounds(x + navigation.previousX(), terminalY - 20, 16, 18).build();
-            var next = Button.builder(Component.literal(">"), b -> {}).bounds(x + navigation.nextX(), terminalY - 20, 16, 18).build();
+            var previous = Button.builder(Component.literal("<"), b -> {}).bounds(x + navigation.previousX(), terminalY - 20, CategoryNavigation.ARROW_WIDTH, 18).build();
+            var next = Button.builder(Component.literal(">"), b -> {}).bounds(x + navigation.nextX(), terminalY - 20, CategoryNavigation.ARROW_WIDTH, 18).build();
             previous.active = page > 0;
             next.active = page + 1 < navigation.count();
             previous.render(graphics, -1, -1, 0);
