@@ -23,18 +23,24 @@ public record SaveCardPayload(int menuId, String data) implements CustomPacketPa
     public static void handle(SaveCardPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
-            if (payload.data().length() > CardWireCodec.MAX_ENCODED_CHARS) return;
             if (!(player.containerMenu instanceof CardEditorMenu menu)
                     || menu.containerId != payload.menuId() || !menu.stillValid(player)) return;
             var hand = menu.editingCard();
             if (!hand.is(MultiFilterMod.FILTER_CARD.get())) return;
+            var original = CardComponents.inspect(hand);
+            if (!original.readable()) {
+                CardComponents.reportFailure(player, "保存", original.problem());
+                return;
+            }
             try {
                 var card = CardWireCodec.decode(payload.data());
                 CardComponents.write(hand, card);
                 player.getInventory().setChanged();
                 menu.broadcastChanges();
                 player.closeContainer();
-            } catch (IllegalArgumentException ignored) { }
+            } catch (IllegalArgumentException e) {
+                CardComponents.reportFailure(player, "保存", e.getMessage());
+            }
         });
     }
 }

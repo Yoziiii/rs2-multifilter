@@ -3,10 +3,14 @@ package dev.rs2multifilter.minecraft;
 import dev.rs2multifilter.core.*;
 import dev.rs2multifilter.minecraft.menu.CardEditorMenu;
 import dev.rs2multifilter.minecraft.network.SaveCardPayload;
+import dev.rs2multifilter.minecraft.network.InstalledCardDataPayload;
 import dev.rs2multifilter.minecraft.network.SwapInstalledCardPayload;
+import dev.rs2multifilter.minecraft.client.ClientCardState;
 import dev.rs2multifilter.minecraft.recipe.CopyCardRecipe;
 import io.netty.buffer.Unpooled;
 import net.minecraft.SharedConstants;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.Bootstrap;
@@ -125,6 +129,14 @@ class DataSafetyRegressionTest {
         var text = org.mockito.ArgumentCaptor.forClass(String.class);
         verify(buffer).writeUtf(text.capture(), eq(CardWireCodec.MAX_ENCODED_CHARS));
         assertEquals(menu.initialCard(), CardWireCodec.decode(text.getValue()));
+        var actual = new RegistryFriendlyByteBuf(Unpooled.buffer(),
+            RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
+        try {
+            writer.getValue().accept(actual);
+            var received = new CardEditorMenu(7, player.getInventory(), actual);
+            assertEquals(menu.initialCard(), received.initialCard());
+            assertEquals(0, actual.readableBytes());
+        } finally { actual.release(); }
         assertEquals(raw, stack.get(MultiFilterMod.CARD_DATA.get()));
     }
     @Test void largeV1CopyRecipePreservesAllRulesAndTheSourceRawBytes() throws Exception {
@@ -203,6 +215,125 @@ class DataSafetyRegressionTest {
             assertEquals(replacement,CardComponents.read(stack));
             assertTrue(stack.get(MultiFilterMod.CARD_DATA.get()).startsWith("v2:"));
             verify(player).closeContainer();
+        }
+    }
+
+    @Test void inspectionDistinguishesMissingEmptyValidUnknownAndCorruptData() throws Exception {
+        assertEquals(CardReadResult.State.EMPTY, CardComponents.inspect(card(null)).state());
+        assertEquals(CardReadResult.State.EMPTY, CardComponents.inspect(card("")).state());
+        for (String raw : List.of(legacy(false), legacy(true), CardWireCodec.encode(normal()),
+                CardWireCodec.encode(FilterCard.blank()))) {
+            var result = CardComponents.inspect(card(raw));
+            assertEquals(CardReadResult.State.VALID, result.state());
+            assertEquals(raw, result.raw());
+            assertTrue(result.diagnostic().isEmpty());
+        }
+        var invalid = invalidData();
+        for (int i = 0; i < invalid.size(); i++) {
+            var result = CardComponents.inspect(card(invalid.get(i)));
+            assertEquals(i < 4 ? CardReadResult.State.UNKNOWN : CardReadResult.State.CORRUPT, result.state());
+            assertEquals(invalid.get(i), result.raw());
+            assertFalse(result.diagnostic().isBlank());
+            assertFalse(result.readable());
+            assertThrows(IllegalArgumentException.class, result::requireCard);
+        }
+    }
+
+    @Test void legalNearLimitV1WouldGain64BytesWithoutChangingAnyExistingLimit() throws Exception {
+        String raw = legacy(true);
+        assertEquals(16_000, CardWireCodec.MAX_BYTES);
+        assertEquals(22_000, CardWireCodec.MAX_ENCODED_CHARS);
+        assertEquals(16_007, Base64.getDecoder().decode(raw.substring(3)).length +
+            CardWireCodec.decode(raw).categories().size());
+        assertThrows(IllegalArgumentException.class, () -> CardWireCodec.encode(CardWireCodec.decode(raw)));
+        assertTrue(CardReadResult.inspect(raw).migrationExceedsLimit());
+        assertFalse(CardReadResult.inspect(legacy(false)).migrationExceedsLimit());
+    }
+
+    @Test void largeV1UsesActualInstalledPacketCodecAndClientAggregationWithoutDataLoss() throws Exception {
+        String raw = legacy(true); var stack = card(raw); var bytes = Unpooled.buffer();
+        try {
+            var sent = new InstalledCardDataPayload(19, 3, SwapInstalledCardPayload.cardData(stack));
+            InstalledCardDataPayload.STREAM_CODEC.encode(bytes, sent);
+            var received = InstalledCardDataPayload.STREAM_CODEC.decode(bytes);
+            assertEquals(sent, received);
+            assertEquals(raw, received.encodedCard());
+            assertEquals(0, bytes.readableBytes());
+            ClientCardState.update(19, 3, received.encodedCard());
+            assertEquals(CardWireCodec.decode(raw), ClientCardState.card(19));
+            assertEquals(raw, stack.get(MultiFilterMod.CARD_DATA.get()));
+        } finally { bytes.release(); ClientCardState.clear(19); }
+    }
+
+    @Test void realItemNbtSaveAndParseRetainLegacyUnknownAndDamagedBytes() throws Exception {
+        var samples = new ArrayList<>(invalidData());
+        samples.add(legacy(true)); samples.add(legacy(false)); samples.add(CardWireCodec.encode(normal()));
+        var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        for (String raw : samples) {
+            var original = card(raw);
+            var restored = ItemStack.parse(registries, original.save(registries)).orElseThrow();
+            assertTrue(restored.is(MultiFilterMod.FILTER_CARD.get()));
+            assertEquals(raw, restored.get(MultiFilterMod.CARD_DATA.get()));
+            assertEquals(CardComponents.inspect(original), CardComponents.inspect(restored));
+        }
+    }
+
+    @Test void realSavedMenuResultSurvivesActualItemNbtPersistence() throws Exception {
+        var registries = RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY);
+        var stack = card(legacy(false)); var player = player(stack);
+        player.containerMenu = new CardEditorMenu(7, player.getInventory(), 0, stack);
+        handle(player, new SaveCardPayload(7, CardWireCodec.encode(normal())));
+        var restored = ItemStack.parse(registries, stack.save(registries)).orElseThrow();
+        assertEquals(normal(), CardComponents.read(restored));
+        assertTrue(restored.get(MultiFilterMod.CARD_DATA.get()).startsWith("v2:"));
+        verify(player).closeContainer();
+    }
+
+    @Test void invalidIncomingSaveCannotChangeAValidOriginal() throws Exception {
+        var invalid = new ArrayList<>(invalidData());
+        invalid.add("x".repeat(CardWireCodec.MAX_ENCODED_CHARS + 1));
+        for (String payload : invalid) {
+            String raw = CardWireCodec.encode(normal());
+            var stack = card(raw); var player = player(stack);
+            player.containerMenu = new CardEditorMenu(7, player.getInventory(), 0, stack);
+            handle(player, new SaveCardPayload(7, payload));
+            assertEquals(raw, stack.get(MultiFilterMod.CARD_DATA.get()));
+            verify(player, never()).closeContainer();
+            verify(player).displayClientMessage(argThat(c -> c.getString().contains("原始")), eq(false));
+        }
+    }
+
+    @Test void largeV1CanBeExplicitlyReducedAndThenSavedAsV2() throws Exception {
+        var stack = card(legacy(true)); var player = player(stack);
+        var initial = CardComponents.read(stack);
+        player.containerMenu = new CardEditorMenu(7, player.getInventory(), 0, stack);
+        var reduced = new FilterCard(FilterCard.VERSION, initial.categories().subList(0, 63));
+        handle(player, new SaveCardPayload(7, CardWireCodec.encode(reduced)));
+        assertEquals(reduced, CardComponents.read(stack));
+        assertTrue(stack.get(MultiFilterMod.CARD_DATA.get()).startsWith("v2:"));
+        verify(player).closeContainer();
+    }
+
+    @Test void componentCopyGuardProtectsInvalidTargetsIndependentlyOfTheRecipe() throws Exception {
+        var source = card(CardWireCodec.encode(normal()));
+        for (String raw : invalidData()) {
+            var target = card(raw);
+            assertThrows(IllegalArgumentException.class, () -> CardComponents.copyConfiguration(source, target));
+            assertEquals(raw, target.get(MultiFilterMod.CARD_DATA.get()));
+        }
+    }
+
+    @Test void invalidInstalledDataIsReportedAndNeverRewrittenIntoABlankCard() throws Exception {
+        var samples = new ArrayList<>(invalidData());
+        samples.add("x".repeat(CardWireCodec.MAX_ENCODED_CHARS + 1));
+        for (String raw : samples) {
+            var stack = card(raw); var player = player(stack);
+            String data = assertDoesNotThrow(() -> SwapInstalledCardPayload.cardData(stack));
+            assertTrue(data.length() <= CardWireCodec.MAX_ENCODED_CHARS);
+            if (raw.length() <= CardWireCodec.MAX_ENCODED_CHARS) assertEquals(raw, data);
+            CardComponents.reportReadStatus(player, stack, "终端同步");
+            verify(player).displayClientMessage(argThat(c -> c.getString().contains("原始")), eq(false));
+            assertEquals(raw, stack.get(MultiFilterMod.CARD_DATA.get()));
         }
     }
 }

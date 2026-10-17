@@ -2,6 +2,7 @@ package dev.rs2multifilter.minecraft.storage;
 
 import com.refinedmods.refinedstorage.common.grid.AbstractGridContainerMenu;
 import dev.rs2multifilter.minecraft.MultiFilterMod;
+import dev.rs2multifilter.minecraft.CardComponents;
 import dev.rs2multifilter.minecraft.mixin.GridMenuAccessor;
 import dev.rs2multifilter.minecraft.network.InstalledCardDataPayload;
 import dev.rs2multifilter.minecraft.network.SwapInstalledCardPayload;
@@ -28,6 +29,7 @@ public final class InstalledCardEvents {
         for (ServerPlayer viewer : world.getServer().getPlayerList().getPlayers()) {
             if (!(viewer.containerMenu instanceof AbstractGridContainerMenu menu)) continue;
             if (((GridMenuAccessor)menu).rs2mf$getGrid() != grid) continue;
+            CardComponents.reportReadStatus(viewer, card, "终端同步");
             PacketDistributor.sendToPlayer(viewer,
                 new InstalledCardDataPayload(menu.containerId, slot, encoded));
         }
@@ -41,6 +43,7 @@ public final class InstalledCardEvents {
         for (int slot = 0; slot < InstalledCardHolder.SLOT_COUNT; slot++) {
             ItemStack card = grid instanceof InstalledCardHolder holder
                 ? holder.rs2mf$getInstalledCard(slot) : ItemStack.EMPTY;
+            CardComponents.reportReadStatus(player, card, "终端同步");
             PacketDistributor.sendToPlayer(player, new InstalledCardDataPayload(
                 menu.containerId, slot, SwapInstalledCardPayload.cardData(card)));
         }

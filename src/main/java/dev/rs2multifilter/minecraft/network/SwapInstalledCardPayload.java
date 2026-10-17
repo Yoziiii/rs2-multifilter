@@ -45,6 +45,7 @@ public record SwapInstalledCardPayload(int menuId, int slot) implements CustomPa
             for (ServerPlayer viewer : player.server.getPlayerList().getPlayers()) {
                 if (!(viewer.containerMenu instanceof AbstractGridContainerMenu viewerMenu)) continue;
                 if (!(((GridMenuAccessor)viewerMenu).rs2mf$getGrid() == grid)) continue;
+                CardComponents.reportReadStatus(viewer, holder.rs2mf$getInstalledCard(slot), "终端同步");
                 PacketDistributor.sendToPlayer(viewer, new InstalledCardDataPayload(
                     viewerMenu.containerId, slot, cardData(holder.rs2mf$getInstalledCard(slot))));
             }
@@ -54,6 +55,6 @@ public record SwapInstalledCardPayload(int menuId, int slot) implements CustomPa
     public static String cardData(ItemStack installed) {
         if (installed.isEmpty()) return "";
         // Server-prepared view only: keep blank items usable by the copy recipe.
-        return CardWireCodec.encode(CardComponents.read(installed).forEditing());
+        return CardComponents.inspect(installed).viewData();
     }
 }

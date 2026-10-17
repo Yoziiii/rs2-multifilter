@@ -26,9 +26,10 @@ public final class CopyCardRecipe extends CustomRecipe {
             else return null;
         }
         if (a < 0 || b < 0) return null;
-        var one = CardComponents.read(input.getItem(a));
-        var two = CardComponents.read(input.getItem(b));
-        if (CardCopyRules.copyConfiguration(one, two) == null) return null;
+        var one = CardComponents.inspect(input.getItem(a));
+        var two = CardComponents.inspect(input.getItem(b));
+        if (!one.readable() || !two.readable()
+                || CardCopyRules.copyConfiguration(one.requireCard(), two.requireCard()) == null) return null;
         return new int[]{a, b};
     }
 
@@ -41,10 +42,9 @@ public final class CopyCardRecipe extends CustomRecipe {
     @Override public ItemStack assemble(CraftingInput input, HolderLookup.Provider registries) {
         int[] pos = validInputs(input);
         if (pos == null) return ItemStack.EMPTY;
-        var copy = CardCopyRules.copyConfiguration(CardComponents.read(input.getItem(pos[0])), CardComponents.read(input.getItem(pos[1])));
-        if (copy == null) return ItemStack.EMPTY;
+        var source = CardComponents.read(input.getItem(pos[0])).categories().isEmpty() ? input.getItem(pos[1]) : input.getItem(pos[0]);
         ItemStack result = new ItemStack(MultiFilterMod.FILTER_CARD.get());
-        CardComponents.write(result, copy);
+        CardComponents.copyConfiguration(source, result);
         return result;
     }
 
