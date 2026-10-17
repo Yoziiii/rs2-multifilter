@@ -207,4 +207,25 @@ class InstalledCardRemovalTest {
         var empty=new Fixture("grid");for(int i=0;i<4;i++)empty.cards.rs2mf$setInstalledCard(i,ItemStack.EMPTY);
         empty.remove();assertTrue(empty.drops.isEmpty());
     }
+    @Test void reentrantRemovalDuringItemSpawnCannotPublishAnyCardTwice() throws Exception {
+        var f=new Fixture("grid"); var entered=new java.util.concurrent.atomic.AtomicBoolean();
+        doAnswer(call -> null).when(f.world).removeBlockEntity(POS);
+        when(f.world.addFreshEntity(any())).thenAnswer(call -> {
+            f.drops.add(call.getArgument(0));
+            if(entered.compareAndSet(false,true)) f.remove();
+            return true;
+        });
+        f.remove(); f.assertDroppedExactlyOnce();
+    }
+    @Test void snapshotRollbackDoesNotDrainOrSpawnInstalledCards() throws Exception {
+        var f=new Fixture("grid"); f.world.restoringBlockSnapshots=true;
+        f.remove(); assertTrue(f.drops.isEmpty()); f.assertInstalled();
+    }
+    @Test void clientRemovalDoesNotSpawnOrDrainInstalledCards() throws Exception {
+        var f=new Fixture("grid"); var client=mock(Level.class);
+        when(client.isClientSide()).thenReturn(true);
+        when(client.getBlockEntity(POS)).thenReturn(f.grid);
+        f.state.onRemove(client,POS,Blocks.AIR.defaultBlockState(),false);
+        verify(client,never()).addFreshEntity(any()); f.assertInstalled();
+    }
 }
