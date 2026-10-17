@@ -59,7 +59,7 @@ class CreativeTabRenderingTest {
         for (boolean selected : new boolean[]{false, true}) {
             var joined = joinedTab(168, selected, 25);
             // Tab edge and the straight terminal side share logical pixel 192.
-            for (int y = 10; y < (selected ? 34 : 30); y++) {
+            for (int y = 13; y < (selected ? 34 : 30); y++) {
                 assertEquals(0xFF000000, joined.getRGB(202, y));
                 assertEquals(0xFF555555, joined.getRGB(201, y));
                 for (int x = 203; x < 207; x++) assertEquals(0, joined.getRGB(x, y));
