@@ -135,4 +135,117 @@ class UnavailableAttributeTest {
             assertEquals(raw,item.get(MultiFilterMod.CARD_DATA.get()));
         }
     }
+    @Test void checkedApiHasThreeDistinctOutcomesAndKeepsDiagnostics(){
+        register("test:three",(s,l)->s.is(Items.STONE));
+        assertEquals(AttributeResult.State.MATCH,CreateAttributeBridge.evaluate(encoded("test:three"),new ItemStack(Items.STONE)).state());
+        assertEquals(AttributeResult.State.NO_MATCH,CreateAttributeBridge.evaluate(encoded("test:three"),new ItemStack(Items.APPLE)).state());
+        var missing=CreateAttributeBridge.evaluate(encoded("missing:type"),new ItemStack(Items.STONE));
+        assertEquals(AttributeResult.State.UNAVAILABLE,missing.state());assertFalse(missing.diagnostic().isBlank());
+    }
+    @Test void healthyCreateRulesRetainAllNormalModeAndExclusionMeanings(){
+        register("test:healthy",(s,l)->s.is(Items.STONE));
+        for(var mode:FilterCategory.Mode.values()) {
+            use(category("正常模式",mode,stone(),attribute("test:healthy",false)));session.select(0);
+            assertEquals(Set.of(mode==FilterCategory.Mode.DENY?Items.APPLE:Items.STONE),visible());
+            assertFalse(session.isSuspended());
+            use(category("正常排除",mode,attribute("test:healthy",true)));session.select(0);
+            assertEquals(Set.of(Items.APPLE),visible());assertFalse(session.isSuspended());
+        }
+    }
+    private void retryDuringNormalScreenMaintenance() throws Exception {
+        var deadline=GridFilterSession.class.getDeclaredField("nextRetryNanos");
+        deadline.setAccessible(true);deadline.setLong(session,0);
+        session.keepNativeControlsWorking();
+    }
+    @Test void aRuntimeFaultAlsoPausesSiblingCategoriesUntilTheFailingSampleWorksAgain() throws Exception {
+        register("test:broken",(s,l)->{throw new IllegalStateException("still broken");});
+        use(category("执行失败",FilterCategory.Mode.ANY,attribute("test:broken",false)),category("同卡正常分类",FilterCategory.Mode.ANY,stone()));
+        session.select(0);assertTrue(session.isSuspended());session.select(1);
+        assertTrue(session.isSuspended());assertTrue(visible().isEmpty());
+        register("test:broken",(s,l)->false);retryDuringNormalScreenMaintenance();
+        assertFalse(session.isSuspended());assertEquals(Set.of(Items.STONE),visible());
+    }
+    @Test void automaticRetryRecoversWithoutReselectingOrChangingTheOriginalCard() throws Exception {
+        use(category("自动恢复",FilterCategory.Mode.DENY,attribute("test:auto",false)));session.select(0);
+        assertTrue(session.isSuspended());var original=session.card();
+        register("test:auto",(s,l)->s.is(Items.APPLE));retryDuringNormalScreenMaintenance();
+        assertFalse(session.isSuspended());assertEquals(Set.of(Items.STONE),visible());assertEquals(original,session.card());
+    }
+    @Test void repeatedFailuresAreDiagnosedOnceAndRecoveryIsReported() throws Exception {
+        var messages=new ArrayList<java.util.logging.LogRecord>();var logger=java.util.logging.Logger.getLogger(GridFilterSession.class.getName());
+        var handler=new java.util.logging.Handler(){
+            public void publish(java.util.logging.LogRecord record){messages.add(record);}
+            public void flush(){} public void close(){}
+        };
+        logger.addHandler(handler);
+        try {
+            use(category("提示",FilterCategory.Mode.ANY,attribute("test:notice",true)));session.select(0);
+            for(int i=0;i<3;i++)retryDuringNormalScreenMaintenance();
+            assertEquals(1,messages.stream().filter(m->m.getLevel()==java.util.logging.Level.WARNING).count());
+            assertFalse(session.suspensionReason().isBlank());
+            register("test:notice",(s,l)->false);retryDuringNormalScreenMaintenance();
+            assertTrue(messages.stream().anyMatch(m->m.getLevel()==java.util.logging.Level.INFO));
+            assertEquals("",session.suspensionReason());
+        } finally {logger.removeHandler(handler);}
+    }
+    @Test void unresolvedExactItemReferenceIsUnavailableRatherThanANormalNonMatch(){
+        var invalid="exact:"+HexFormat.of().formatHex("{id:\"removed:item\",count:1}".getBytes(StandardCharsets.UTF_8));
+        var result=ExactItemBridge.evaluate(invalid,new ItemStack(Items.STONE));
+        assertEquals(AttributeResult.State.UNAVAILABLE,result.state());
+        use(category("精确失效",FilterCategory.Mode.ANY,stone(),new FilterRule(FilterRule.Kind.EXACT_ITEM,invalid,true)));
+        session.select(0);assertTrue(session.isSuspended());assertTrue(visible().isEmpty());
+    }
+    @Test void validExactItemStillHasMatchAndNoMatch(){
+        String value=ExactItemBridge.encode(new ItemStack(Items.STONE));assertNotNull(value);
+        assertTrue(ExactItemBridge.availability(value).available());
+        assertEquals(AttributeResult.State.MATCH,ExactItemBridge.evaluate(value,new ItemStack(Items.STONE)).state());
+        assertEquals(AttributeResult.State.NO_MATCH,ExactItemBridge.evaluate(value,new ItemStack(Items.APPLE)).state());
+    }
+    @Test void physicalOwnershipChangesAreDetectedEvenWhenFlattenedCategoriesStayEqual(){
+        var good=category("好",FilterCategory.Mode.ANY,stone());var bad=category("坏",FilterCategory.Mode.ANY,attribute("missing:type",true));
+        var other=category("另一分类",FilterCategory.Mode.ANY,stone());
+        ClientCardState.update(menu.containerId,0,CardWireCodec.encode(new FilterCard(FilterCard.VERSION,List.of(good,bad))));
+        ClientCardState.update(menu.containerId,1,CardWireCodec.encode(new FilterCard(FilterCard.VERSION,List.of(other))));
+        var original=ClientCardState.card(menu.containerId);session=GridFilterSession.attach(menu,original);
+        session.select(0);assertTrue(session.isSuspended());
+        ClientCardState.update(menu.containerId,0,CardWireCodec.encode(new FilterCard(FilterCard.VERSION,List.of(good))));
+        ClientCardState.update(menu.containerId,1,CardWireCodec.encode(new FilterCard(FilterCard.VERSION,List.of(bad,other))));
+        assertEquals(original,ClientCardState.card(menu.containerId));session.keepNativeControlsWorking();
+        assertFalse(session.isSuspended());assertEquals(Set.of(Items.STONE),visible());
+        session.select(2);assertTrue(session.isSuspended());assertTrue(visible().isEmpty());
+    }
+    @Test void unreadableEarlierSlotDoesNotShiftThePhysicalOwnerOfHealthyCards(){
+        ClientCardState.update(menu.containerId,0,"v99:unknown");
+        ClientCardState.update(menu.containerId,1,CardWireCodec.encode(new FilterCard(FilterCard.VERSION,List.of(category("健康",FilterCategory.Mode.ANY,stone())))));
+        assertEquals(1,ClientCardState.source(menu.containerId,0).slot());
+        session=GridFilterSession.attach(menu,ClientCardState.card(menu.containerId));session.select(0);
+        assertFalse(session.isSuspended());assertEquals(Set.of(Items.STONE),visible());
+    }
+    @Test void actualClassLookupFailureProducesUnavailableInAnIsolatedLoader() throws Exception {
+        byte[] bytes;
+        try(var stream=CreateAttributeBridge.class.getResourceAsStream("CreateAttributeBridge.class")){bytes=stream.readAllBytes();}
+        var loader=new ClassLoader(CreateAttributeBridge.class.getClassLoader()){
+            @Override protected Class<?> loadClass(String name,boolean resolve) throws ClassNotFoundException {
+                if(name.equals(ItemAttribute.class.getName()))throw new ClassNotFoundException("Create intentionally absent in test");
+                if(name.equals(CreateAttributeBridge.class.getName())){
+                    var type=findLoadedClass(name);if(type==null)type=defineClass(name,bytes,0,bytes.length);
+                    if(resolve)resolveClass(type);return type;
+                }
+                return super.loadClass(name,resolve);
+            }
+        };
+        var bridge=loader.loadClass(CreateAttributeBridge.class.getName());
+        var result=(AttributeResult)bridge.getMethod("evaluate",String.class,ItemStack.class).invoke(null,encoded("test:missing"),new ItemStack(Items.STONE));
+        assertEquals(AttributeResult.State.UNAVAILABLE,result.state());assertTrue(result.diagnostic().contains("ClassNotFoundException"));
+    }
+    @Test void aTemporaryRegistrationOutageCannotEraseTheKnownExecutionFailure() throws Exception {
+        register("test:outage",(s,l)->{throw new IllegalStateException("execution still broken");});
+        use(category("出错分类",FilterCategory.Mode.ANY,attribute("test:outage",false)),category("同卡普通分类",FilterCategory.Mode.ANY,stone()));
+        session.select(0);assertTrue(session.isSuspended());
+        ItemAttribute.Fixture.registered.remove("test:outage");session.select(1);assertTrue(session.isSuspended());
+        register("test:outage",(s,l)->{throw new IllegalStateException("execution still broken");});
+        retryDuringNormalScreenMaintenance();assertTrue(session.isSuspended());assertTrue(visible().isEmpty());
+        register("test:outage",(s,l)->true);retryDuringNormalScreenMaintenance();
+        assertFalse(session.isSuspended());assertEquals(Set.of(Items.STONE),visible());
+    }
 }

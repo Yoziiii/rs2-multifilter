@@ -9,12 +9,15 @@ import java.util.*;
 /** Four synchronized installed cards, with flattened tabs in physical slot order. */
 public final class ClientCardState {
     private static final Map<Integer, String[]> SYNCED = new HashMap<>();
+    private static final Map<Integer, Integer> REVISIONS = new HashMap<>();
     private ClientCardState() {}
 
     public static void update(int menuId, int slot, String data) {
         if (menuId < 0 || menuId > 255 || slot < 0 || slot >= InstalledCardHolder.SLOT_COUNT ||
             data == null || data.length() > CardWireCodec.MAX_ENCODED_CHARS) return;
-        SYNCED.computeIfAbsent(menuId, ignored -> new String[InstalledCardHolder.SLOT_COUNT])[slot] = data;
+        var slots=SYNCED.computeIfAbsent(menuId, ignored -> new String[InstalledCardHolder.SLOT_COUNT]);
+        if(!Objects.equals(slots[slot],data)) REVISIONS.merge(menuId,1,Integer::sum);
+        slots[slot] = data;
     }
     public static boolean installed(int menuId, int slot) {
         String[] slots = SYNCED.get(menuId);
@@ -39,6 +42,23 @@ public final class ClientCardState {
         return new FilterCard(FilterCard.VERSION, merged.subList(0,
             Math.min(merged.size(), FilterCard.MAX_CATEGORIES)));
     }
-    public static void clear(int menuId) { SYNCED.remove(menuId); }
-    public static void clearAll() { SYNCED.clear(); }
+    public static void clear(int menuId) { SYNCED.remove(menuId); REVISIONS.remove(menuId); }
+    public static int revision(int menuId) { return REVISIONS.getOrDefault(menuId,0); }
+    /** Physical ownership for runtime fault isolation. Does not change tab ordering or stored data. */
+    public record Source(int slot, FilterCard card) {}
+    public static Source source(int menuId, int category) {
+        String[] slots=SYNCED.get(menuId);
+        if (slots==null || category<0) return null;
+        int offset=0;
+        for(int slot=0;slot<slots.length;slot++) {
+            if(slots[slot]==null || slots[slot].isEmpty()) continue;
+            try {
+                FilterCard card=CardWireCodec.decode(slots[slot]);
+                if(category < offset+card.categories().size()) return new Source(slot,card);
+                offset+=card.categories().size();
+            } catch(IllegalArgumentException ignored) { /* Same unreadable-card handling as card(). */ }
+        }
+        return null;
+    }
+    public static void clearAll() { SYNCED.clear(); REVISIONS.clear(); }
 }

@@ -16,16 +16,30 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import java.util.WeakHashMap;
 import java.lang.ref.WeakReference;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.logging.Logger;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
+import com.refinedmods.refinedstorage.api.resource.repository.ResourceRepository;
 import dev.rs2multifilter.minecraft.mixin.RepositoryFilterAccessor;
 import com.refinedmods.refinedstorage.api.resource.repository.ResourceRepositoryImpl;
 
 public final class GridFilterSession {
+    private static final Logger LOGGER = Logger.getLogger(GridFilterSession.class.getName());
+    private static final long RETRY_NANOS = 2_000_000_000L;
     private static final WeakHashMap<AbstractGridContainerMenu, GridFilterSession> SESSIONS = new WeakHashMap<>();
     private final WeakReference<AbstractGridContainerMenu> menuRef;
     private FilterCard card;
     private ResourceRepositoryFilter<GridResource> searchFilter;
     private ResourceRepositoryFilter<GridResource> lastWrapped;
     private int selected = -1;
+    private record Suspension(FilterRule rule, String reason, Map<FilterRule,ItemStack> failedSamples) {}
+    private final Map<ClientCardState.Source, Suspension> suspended = new HashMap<>();
+    private final Map<ClientCardState.Source, String> reported = new HashMap<>();
+    private long nextRetryNanos;
+    private ClientCardState.Source currentOwner;
+    private int sourceRevision;
 
     private GridFilterSession(AbstractGridContainerMenu menu, FilterCard card) {
         this.menuRef = new WeakReference<>(menu);
@@ -60,8 +74,11 @@ public final class GridFilterSession {
      */
     public void keepNativeControlsWorking() {
         if (selected < 0) return;
+        if (isSuspended() && System.nanoTime() >= nextRetryNanos) reapply();
+        reportRecovery();
         AbstractGridContainerMenu menu = menuRef.get();
         if (menu == null || !(menu.getRepository() instanceof ResourceRepositoryImpl<?> repository)) return;
+        if(sourceRevision!=ClientCardState.revision(menu.containerId)) reapply();
         @SuppressWarnings("unchecked")
         ResourceRepositoryFilter<GridResource> active =
             (ResourceRepositoryFilter<GridResource>)
@@ -78,6 +95,8 @@ public final class GridFilterSession {
     public void updateCard(FilterCard replacement) {
         if (card.equals(replacement)) return;
         card = replacement;
+        suspended.clear();
+        reported.clear();
         if (selected >= card.categories().size()) selected = -1;
         reapply();
     }
@@ -87,6 +106,7 @@ public final class GridFilterSession {
         if (menu == null) return;
         if (searchFilter == null) searchFilter = (r, item) -> true;
         menu.getRepository().setFilterAndSort(wrap(searchFilter));
+        reportRecovery();
     }
 
 
@@ -97,6 +117,103 @@ public final class GridFilterSession {
         if (menu == null) return;
         if (searchFilter == null) searchFilter = (r, item) -> true;
         menu.getRepository().setFilterAndSort(wrap(searchFilter));
+        reportRecovery();
+    }
+
+    private ClientCardState.Source resolveSource() {
+        AbstractGridContainerMenu menu=menuRef.get();
+        sourceRevision=menu==null ? 0 : ClientCardState.revision(menu.containerId);
+        var physical=menu==null ? null : ClientCardState.source(menu.containerId,selected);
+        return physical!=null && physical.card().categories().contains(card.categories().get(selected))
+            ? physical : new ClientCardState.Source(-1,card);
+    }
+    public boolean isSuspended() { return selected>=0 && currentOwner!=null && suspended.containsKey(currentOwner); }
+    public String suspensionReason() {
+        return isSuspended() ? suspended.get(currentOwner).reason() : "";
+    }
+    private static AttributeResult availability(FilterRule rule) {
+        return switch(rule.kind()) {
+            case CREATE_ATTRIBUTE -> CreateAttributeBridge.availability(rule.value());
+            case EXACT_ITEM -> ExactItemBridge.availability(rule.value());
+            default -> AttributeResult.match(true);
+        };
+    }
+    private static AttributeResult evaluateAttribute(FilterRule rule,ItemStack stack) {
+        return rule.kind()==FilterRule.Kind.CREATE_ATTRIBUTE
+            ? CreateAttributeBridge.evaluate(rule.value(),stack) : ExactItemBridge.evaluate(rule.value(),stack);
+    }
+    private void prepare(ClientCardState.Source owner) {
+        var previous=suspended.get(owner);
+        for(var category:owner.card().categories()) for(var rule:category.rules()) {
+            var result=availability(rule);
+            if(!result.available()) {
+                suspend(owner,rule,result.diagnostic(),ItemStack.EMPTY);
+                return;
+            }
+        }
+        // A registered provider can still be broken. Recheck the actual failing sample before
+        // unpausing sibling categories, rather than considering registration alone a recovery.
+        if(previous!=null) {
+            for(var failure:previous.failedSamples().entrySet()) {
+                var result=evaluateAttribute(failure.getKey(),failure.getValue());
+                if(!result.available()) {
+                    suspend(owner,failure.getKey(),result.diagnostic(),failure.getValue());
+                    return;
+                }
+            }
+        }
+        suspended.remove(owner);
+    }
+    private static String ownerName(ClientCardState.Source owner) {
+        return owner.slot()<0 ? "当前过滤升级" : "第 "+(owner.slot()+1)+" 张过滤升级";
+    }
+    private void suspend(ClientCardState.Source owner,FilterRule rule,String reason,ItemStack sample) {
+        var previous=suspended.get(owner);
+        Map<FilterRule,ItemStack> samples=previous==null ? new HashMap<>() : previous.failedSamples();
+        if(!sample.isEmpty()) samples.put(rule,sample.copyWithCount(1));
+        suspended.put(owner,new Suspension(rule,reason,samples));
+        nextRetryNanos=System.nanoTime()+RETRY_NANOS;
+        String detail=rule.kind()+" / "+(rule.exclude()?"排除":"包含")+" / "+rule.value()+" / "+reason;
+        if(detail.equals(reported.put(owner,detail))) return;
+        LOGGER.warning(ownerName(owner)+"属性不可用；该卡所有分类已暂停，显示空结果；规则及库存未修改。"+detail);
+        var client=Minecraft.getInstance();
+        if(client!=null && client.player!=null) {
+            String brief=reason.length()>160 ? reason.substring(0,160)+"…" : reason;
+            client.player.displayClientMessage(Component.literal(ownerName(owner)+"属性不可用，已暂停该卡所有分类。"
+                +brief+"；将自动重试，原始规则未修改。"),false);
+        }
+    }
+    private void reportRecovery() {
+        if(selected<0 || isSuspended()) return;
+        var owner=currentOwner;
+        if(owner==null) return;
+        if(reported.remove(owner)==null) return;
+        LOGGER.info(ownerName(owner)+"属性检查恢复，已重新执行原始过滤规则。");
+        var client=Minecraft.getInstance();
+        if(client!=null && client.player!=null)client.player.displayClientMessage(
+            Component.literal(ownerName(owner)+"属性检查恢复，已重新执行原始规则。"),false);
+    }
+
+    /** Only our suspended filter may discard its cached view. Never clear the backing inventory.
+     * Called after RS builds a view / completes an incremental update, before control returns. */
+    public static void guardRepository(ResourceRepository<?> repository) {
+        if(!(repository instanceof RepositoryFilterAccessor accessor)) return;
+        var filter=accessor.rs2multifilter$getFilter();
+        if(filter instanceof GridFilterSession.CardFilter guarded && guarded.paused()
+                && !repository.getViewList().isEmpty()) repository.sort();
+    }
+
+    private final class CardFilter implements ResourceRepositoryFilter<GridResource> {
+        private final ClientCardState.Source owner;
+        private final FilterCategory category;
+        private final ResourceRepositoryFilter<GridResource> nativeFilter;
+        CardFilter(ClientCardState.Source owner,FilterCategory category,ResourceRepositoryFilter<GridResource> nativeFilter) {
+            this.owner=owner;this.category=category;this.nativeFilter=nativeFilter;
+        }
+        boolean paused() { return suspended.containsKey(owner); }
+        @Override public boolean test(ResourceRepository<GridResource> repo,GridResource resource) {
+            return !paused() && nativeFilter.test(repo,resource) && matches(owner,category,resource);
+        }
     }
 
     private ResourceRepositoryFilter<GridResource> wrap(ResourceRepositoryFilter<GridResource> nativeFilter) {
@@ -105,13 +222,18 @@ public final class GridFilterSession {
             return nativeFilter;
         }
         FilterCategory category = card.categories().get(selected);
+        var owner=resolveSource();
+        currentOwner=owner;
+        suspended.keySet().removeIf(old -> old.slot()==owner.slot() && !old.equals(owner));
+        reported.keySet().removeIf(old -> old.slot()==owner.slot() && !old.equals(owner));
+        prepare(owner);
         lastWrapped = category.rules().isEmpty()
             ? (repo, resource) -> false
-            : (repo, resource) -> nativeFilter.test(repo, resource) && matches(category, resource);
+            : new CardFilter(owner,category,nativeFilter);
         return lastWrapped;
     }
 
-    private static boolean matches(FilterCategory category, GridResource resource) {
+    private boolean matches(ClientCardState.Source owner,FilterCategory category, GridResource resource) {
         boolean isItem = resource instanceof ItemGridResource;
         boolean isFluid = resource instanceof FluidGridResource;
         if (!isItem && !isFluid) return false;
@@ -123,7 +245,8 @@ public final class GridFilterSession {
             ? BuiltInRegistries.ITEM.getKey(stack.getItem())
             : BuiltInRegistries.FLUID.getKey(fluid);
 
-        return category.matches(rule -> switch (rule.kind()) {
+        try {
+            return category.matches(rule -> switch (rule.kind()) {
                 case MOD -> id.getNamespace().equals(rule.value());
                 case ITEM -> isItem && id.toString().equals(rule.value());
                 case TAG -> isItem && stack.is(TagKey.create(Registries.ITEM,
@@ -135,8 +258,17 @@ public final class GridFilterSession {
                 case DAMAGED -> isItem && stack.isDamaged();
                 case DAMAGEABLE -> isItem && stack.isDamageableItem();
                 case ENCHANTED -> isItem && stack.isEnchanted();
-                case CREATE_ATTRIBUTE -> isItem && CreateAttributeBridge.matches(rule.value(), stack);
-                case EXACT_ITEM -> isItem && ExactItemBridge.matches(rule.value(), stack);
-        });
+                case CREATE_ATTRIBUTE, EXACT_ITEM -> isItem && checkedAttribute(owner,rule,stack);
+            });
+        } catch (UnavailableRule ignored) {
+            return false; // Abort the entire combination; never turn an excluded failure into "not matched".
+        }
+    }
+    private static final class UnavailableRule extends RuntimeException {}
+    private boolean checkedAttribute(ClientCardState.Source owner,FilterRule rule,ItemStack stack) {
+        var result=evaluateAttribute(rule,stack);
+        if(result.available())return result.matched();
+        suspend(owner,rule,result.diagnostic(),stack);
+        throw new UnavailableRule();
     }
 }

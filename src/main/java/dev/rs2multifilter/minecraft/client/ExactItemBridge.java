@@ -32,18 +32,22 @@ public final class ExactItemBridge {
     }
 
     private static ItemStack read(String value) {
+        try { return readChecked(value); }
+        catch (Exception | LinkageError e) { return ItemStack.EMPTY; }
+    }
+    private static ItemStack readChecked(String value) throws Exception {
         ItemStack cached = CACHE.get(value);
-        if (cached != null) return cached;
-        if (!value.startsWith("exact:") || Minecraft.getInstance().level == null) return ItemStack.EMPTY;
-        try {
-            String snbt = new String(HEX.parseHex(value.substring(6)), StandardCharsets.UTF_8);
-            if (snbt.length() > 2048) return ItemStack.EMPTY;
-            ItemStack parsed = ItemStack.parseOptional(Minecraft.getInstance().level.registryAccess(),
-                TagParser.parseTag(snbt));
-            if (CACHE.size() > 512) CACHE.clear();
-            CACHE.put(value, parsed);
-            return parsed;
-        } catch (Exception e) { return ItemStack.EMPTY; }
+        if (cached != null && !cached.isEmpty()) return cached;
+        if (!value.startsWith("exact:") || Minecraft.getInstance().level == null)
+            throw new IllegalStateException("精确物品编码或当前世界不可用");
+        String snbt = new String(HEX.parseHex(value.substring(6)), StandardCharsets.UTF_8);
+        if (snbt.length() > 2048) throw new IllegalArgumentException("精确物品数据过长");
+        ItemStack parsed = ItemStack.parseOptional(Minecraft.getInstance().level.registryAccess(),
+            TagParser.parseTag(snbt));
+        if (parsed.isEmpty()) throw new IllegalStateException("引用物品或组件缺失，或精确物品数据无法解码");
+        if (CACHE.size() > 512) CACHE.clear();
+        CACHE.put(value, parsed);
+        return parsed;
     }
 
     public static String registryId(String value) {
@@ -54,9 +58,24 @@ public final class ExactItemBridge {
     }
 
     public static boolean matches(String value, ItemStack candidate) {
-        ItemStack reference = read(value);
-        return !reference.isEmpty() && !candidate.isEmpty()
-            && ItemStack.isSameItemSameComponents(reference, candidate);
+        return evaluate(value, candidate).matched();
+    }
+    public static AttributeResult availability(String value) {
+        CACHE.remove(value);
+        try { readChecked(value); return AttributeResult.match(true); }
+        catch (Exception | LinkageError e) {
+            CACHE.remove(value);
+            return AttributeResult.unavailable("精确物品不可用：" + AttributeResult.failure(e));
+        }
+    }
+    public static AttributeResult evaluate(String value, ItemStack candidate) {
+        try {
+            ItemStack reference=readChecked(value);
+            return AttributeResult.match(!candidate.isEmpty() && ItemStack.isSameItemSameComponents(reference,candidate));
+        } catch (Exception | LinkageError e) {
+            CACHE.remove(value);
+            return AttributeResult.unavailable("精确物品执行失败：" + AttributeResult.failure(e));
+        }
     }
 
     public static String describe(String value) {

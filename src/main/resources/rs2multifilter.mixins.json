@@ -9,6 +9,7 @@
   },
   "client": [
     "GridSearchMixin",
+    "RepositorySuspensionMixin",
     "GridPanelBackgroundMixin",
     "GridSlotOutsideClickMixin"
   ],
