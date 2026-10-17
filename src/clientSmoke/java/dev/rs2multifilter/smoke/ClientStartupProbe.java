@@ -17,6 +17,7 @@ public final class ClientStartupProbe {
     private static EditBox vanilla;
     private static CardEditorScreen.NameField name;
     private static int previewIndex, scaleWaitFrames;
+    private static boolean windowPrepared;
 
     @SubscribeEvent
     public static void titleReady(ScreenEvent.Init.Post event) {
@@ -37,6 +38,12 @@ public final class ClientStartupProbe {
     public static void titleRendered(ScreenEvent.Render.Post event) {
         if (passed || name == null || !(event.getScreen() instanceof TitleScreen)) return;
         var client = Minecraft.getInstance();
+        if (!windowPrepared) {
+            windowPrepared = true;
+            client.getWindow().setWindowed(1280, 720);
+            client.resizeDisplay();
+            return;
+        }
         int scale = previewIndex < 4 ? 2 : 3;
         if (Math.abs(client.getWindow().getGuiScale() - scale) > 0.01) {
             if (++scaleWaitFrames > 30) throw new IllegalStateException("Cannot reach GUI scale " + scale);

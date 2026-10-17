@@ -74,7 +74,7 @@ jobs:
           exit 1
       - name: NeoForge client startup and EditBox smoke test
         run: |
-          printf 'onboardAccessibility:false\noverrideWidth:1280\noverrideHeight:720\nguiScale:2\n' > run/options.txt
+          printf 'onboardAccessibility:false\nguiScale:2\n' > run/options.txt
           set +e
           ALSOFT_DRIVERS=null timeout 240s xvfb-run -a -s '-screen 0 1280x720x24' gradle runClient -PclientSmoke=true --console=plain > client-smoke.log 2>&1
           CLIENT_EXIT=$?
