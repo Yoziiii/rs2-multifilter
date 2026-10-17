@@ -18,6 +18,8 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.event.ScreenEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.ArrayList;
@@ -31,7 +33,7 @@ public final class GridTabs {
     private static final Map<AbstractGridScreen<?>, TabState> STATES = new WeakHashMap<>();
     private static GridPreferences preferences;
     private GridTabs() {}
-    private record TabState(GridFilterSession session, GridCategoryState selection, Runnable refresh) {}
+    private record TabState(GridFilterSession session, GridCategoryState selection, Runnable refresh, int[] page) {}
 
     private static GridPreferences preferences() {
         if (preferences == null) preferences = new GridPreferences(
@@ -47,11 +49,32 @@ public final class GridTabs {
     }
     @SubscribeEvent public static void onScreenClosing(ScreenEvent.Closing event) {
         if (event.getScreen() instanceof AbstractGridScreen<?> screen) {
-            TabState state = STATES.remove(screen);
-            if (state != null) state.selection.rememberCurrent();
-            GridFilterSession.detach(screen.getMenu());
-            ClientCardState.clear(screen.getMenu().containerId);
+            // JEI temporarily replaces the screen but keeps this exact menu open.
+            // ScreenEvent.Closing is not a container-close notification.
+            var client = Minecraft.getInstance();
+            var player = client == null ? null : client.player;
+            if (player == null || player.containerMenu != screen.getMenu()) close(screen);
         }
+    }
+    private static void close(AbstractGridScreen<?> screen) {
+        TabState state = STATES.remove(screen);
+        if (state != null) state.selection.rememberCurrent();
+        GridFilterSession.detach(screen.getMenu());
+        ClientCardState.clear(screen.getMenu().containerId);
+    }
+    @SubscribeEvent public static void onClientTick(ClientTickEvent.Post event) {
+        if (STATES.isEmpty()) return;
+        var client = Minecraft.getInstance();
+        var player = client == null ? null : client.player;
+        // Also handles a server-side close while JEI is covering the terminal.
+        // Only compare menu identities; do not read/rebuild categories each tick.
+        for (var screen : new ArrayList<>(STATES.keySet())) {
+            if (player == null || player.containerMenu != screen.getMenu()) close(screen);
+        }
+    }
+    @SubscribeEvent public static void onLogout(ClientPlayerNetworkEvent.LoggingOut event) {
+        for (var screen : new ArrayList<>(STATES.keySet())) close(screen);
+        ClientCardState.clearAll();
     }
     @SubscribeEvent public static void onScreenInit(ScreenEvent.Init.Post event) {
         if (!(event.getScreen() instanceof AbstractGridScreen<?> screen)) return;
@@ -59,6 +82,7 @@ public final class GridTabs {
         GridCategoryState selection = old == null ? new GridCategoryState(preferences(), scope()) : old.selection;
         int menuId = screen.getMenu().containerId;
         selection.synchronize(ClientCardState.card(menuId), ClientCardState.hasCompleteSync(menuId));
+        boolean sameCard = old != null && old.session.card().equals(selection.card());
         GridFilterSession session = old == null ? GridFilterSession.attach(screen.getMenu(), selection.card()) : old.session;
         session.updateCard(selection.card());
         session.select(selection.selected());
@@ -68,7 +92,8 @@ public final class GridTabs {
         CategoryNavigation[] navigation = {new CategoryNavigation(selection.card().categories().stream()
             .map(c -> c.name()).toList(), font::width, width)};
         FilterCard[] layoutCard = {selection.card()};
-        int[] page = {navigation[0].pageFor(selection.selected())};
+        int[] page = {!sameCard
+            ? navigation[0].pageFor(selection.selected()) : navigation[0].clamp(old.page[0])};
         Runnable[] refresh = {() -> {}};
         var tabs = new ArrayList<TabButton>();
         for (int i = 0; i < CategoryNavigation.maxVisibleTabs(width); i++) {
@@ -124,7 +149,7 @@ public final class GridTabs {
         screen.addSideButton(new RememberCategoryButton(selection));
         screen.getExclusionZones().add(new Rect2i(screen.getGuiLeft(), y, barWidth(screen), 24));
         screen.getExclusionZones().add(new Rect2i(screen.getGuiLeft() + 197, screen.getGuiTop(), 30, 82));
-        STATES.put(screen, new TabState(session, selection, refresh[0]));
+        STATES.put(screen, new TabState(session, selection, refresh[0], page));
         refresh[0].run();
     }
 
