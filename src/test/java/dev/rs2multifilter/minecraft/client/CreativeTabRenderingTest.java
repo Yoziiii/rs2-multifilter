@@ -21,6 +21,10 @@ class CreativeTabRenderingTest {
 
     /** Rasterize the actual blit calls against the actual RS corners. No screenshot estimate. */
     private java.awt.image.BufferedImage joinedTab(int tabOffset, boolean selected) throws Exception {
+        return joinedTab(tabOffset, selected, 26);
+    }
+
+    private java.awt.image.BufferedImage joinedTab(int tabOffset, boolean selected, int width) throws Exception {
         var canvas = new java.awt.image.BufferedImage(260, 80, java.awt.image.BufferedImage.TYPE_INT_ARGB);
         var paint = canvas.createGraphics();
         paint.drawImage(resource("assets/refinedstorage/textures/gui/grid.png").getSubimage(0, 0, 193, 36), 10, 30, null);
@@ -35,7 +39,7 @@ class CreativeTabRenderingTest {
             paint.drawImage(sprite.getSubimage(u, v, w, h), x, y, null);
             return null;
         }).when(graphics).blitSprite(any(ResourceLocation.class), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt(), anyInt());
-        RsUi.iconTab(graphics, 10 + tabOffset, 7, selected, 10);
+        RsUi.iconTab(graphics, 10 + tabOffset, 7, selected, 10, width);
         paint.dispose();
         return canvas;
     }
@@ -50,16 +54,38 @@ class CreativeTabRenderingTest {
         }
     }
 
-    @Test void selectedLastPagedTabCannotPaintOverTheTerminalRightCornerOrPanelGap() throws Exception {
+    @Test void lastTabOuterEdgeMatchesTheTerminalInBothStatesWithoutPaintingIntoTheGap() throws Exception {
         var original = resource("assets/refinedstorage/textures/gui/grid.png");
         for (boolean selected : new boolean[]{false, true}) {
-            var joined = joinedTab(168, selected);
+            var joined = joinedTab(168, selected, 25);
+            // Tab edge and the straight terminal side share logical pixel 192.
+            for (int y = 10; y < (selected ? 34 : 30); y++) {
+                assertEquals(0xFF000000, joined.getRGB(202, y));
+                assertEquals(0xFF555555, joined.getRGB(201, y));
+                for (int x = 203; x < 207; x++) assertEquals(0, joined.getRGB(x, y));
+            }
             for (int y = 0; y < 4; y++) {
-                for (int x = 189; x < 193; x++)
-                    assertEquals(original.getRGB(x, y), joined.getRGB(10 + x, 30 + y));
+                for (int x = 190; x < 193; x++) {
+                    int expected = selected ? (x == 192 ? 0xFF000000 : 0xFF555555) : original.getRGB(x, y);
+                    assertEquals(expected, joined.getRGB(10 + x, 30 + y));
+                }
                 for (int x = 193; x < 197; x++) assertEquals(0, joined.getRGB(10 + x, 30 + y));
             }
+            assertEquals(selected ? 0xFFC6C6C6 : 0xFF8B8B8B, joined.getRGB(190, 20));
         }
+    }
+
+    @Test void rightCapUsesNativePixelsInsteadOfScalingTheThreePixelBevel() throws Exception {
+        var sprite = resource("assets/minecraft/textures/gui/sprites/" + RsUi.TAB_SELECTED_RIGHT.getPath() + ".png");
+        for (int y = 28; y < 32; y++) {
+            assertEquals(0xFF555555, sprite.getRGB(23, y));
+            assertEquals(0xFF555555, sprite.getRGB(24, y));
+            assertEquals(0xFF000000, sprite.getRGB(25, y));
+        }
+        var g = mock(GuiGraphics.class);
+        RsUi.iconTab(g, 218, 7, true, 50, 25);
+        verify(g).blitSprite(RsUi.TAB_SELECTED_RIGHT, 26, 32, 23, 28, 240, 30, 3, 4);
+        verify(g, never()).fill(anyInt(), anyInt(), anyInt(), anyInt(), anyInt());
     }
 
     @Test void eighthTabKeepsTheUpgradePanelsLeftCornerAndTheGapIntact() throws Exception {

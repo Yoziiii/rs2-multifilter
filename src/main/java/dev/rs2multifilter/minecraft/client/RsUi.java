@@ -10,6 +10,8 @@ public final class RsUi {
         "container/creative_inventory/tab_top_selected_2");
     public static final ResourceLocation TAB_SELECTED_LEFT = ResourceLocation.withDefaultNamespace(
         "container/creative_inventory/tab_top_selected_1");
+    public static final ResourceLocation TAB_SELECTED_RIGHT = ResourceLocation.withDefaultNamespace(
+        "container/creative_inventory/tab_top_selected_7");
     public static final ResourceLocation TAB_UNSELECTED = ResourceLocation.withDefaultNamespace(
         "container/creative_inventory/tab_top_unselected_2");
     public static ResourceLocation id(String path) { return ResourceLocation.fromNamespaceAndPath("refinedstorage", path); }
@@ -37,6 +39,19 @@ public final class RsUi {
      * Keep native 26px artwork; callers own the tab's position and spacing.
      * Selected extends four pixels into the panel; unselected stops above it. */
     public static void iconTab(GuiGraphics g, int x, int y, boolean selected, int terminalLeft) {
+        iconTab(g, x, y, selected, terminalLeft, 26);
+    }
+    public static void iconTab(GuiGraphics g, int x, int y, boolean selected, int terminalLeft, int width) {
+        // Only the terminal-edge tab is 25px. Keep the native outer three pixels,
+        // skipping one flat interior column, rather than scaling its bevel or icon.
+        if (width == 25 && x + width == terminalLeft + 193) {
+            ResourceLocation sprite = selected ? TAB_SELECTED_RIGHT : TAB_UNSELECTED;
+            int height = selected ? 27 : 23;
+            rightTabPart(g, sprite, x, y, 0, 7);
+            rightTabPart(g, sprite, x, y + 7, 7, height - 11);
+            rightTabPart(g, sprite, x, y + height - 4, 28, 4);
+            return;
+        }
         ResourceLocation sprite = selected ? (x == terminalLeft ? TAB_SELECTED_LEFT : TAB_SELECTED) : TAB_UNSELECTED;
         int height = selected ? 27 : 23;
         g.blitSprite(sprite, 26, 32, 0, 0, x, y, 26, 7);
@@ -50,6 +65,10 @@ public final class RsUi {
         // The first creative-tab sprite keeps the terminal's left vertical edge.
         tabConnection(g, sprite, x, y + 23, terminalLeft, terminalLeft + 189);
         tabConnection(g, sprite, x, y + 23, terminalLeft + 201, terminalLeft + 223);
+    }
+    private static void rightTabPart(GuiGraphics g, ResourceLocation sprite, int x, int y, int v, int height) {
+        g.blitSprite(sprite, 26, 32, 0, v, x, y, 22, height);
+        g.blitSprite(sprite, 26, 32, 23, v, x + 22, y, 3, height);
     }
     private static void tabConnection(GuiGraphics g, ResourceLocation sprite, int x, int y, int left, int right) {
         int start = Math.max(x, left), end = Math.min(x + 26, right);

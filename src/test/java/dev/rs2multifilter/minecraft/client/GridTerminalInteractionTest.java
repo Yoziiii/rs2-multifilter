@@ -328,6 +328,9 @@ class GridTerminalInteractionTest {
                     verify(init, times(10)).addListener(captured.capture());
                     var buttons = captured.getAllValues().stream().map(Button.class::cast).toList();
                     assertEquals(left, buttons.getFirst().getX());
+                    assertEquals(left + 193, buttons.get(6).getX() + buttons.get(6).getWidth());
+                    assertEquals(25, buttons.get(6).getWidth());
+                    assertEquals(2, buttons.get(6).getX() - buttons.get(5).getX() - buttons.get(5).getWidth());
                     assertEquals(left + 197, buttons.get(8).getX());
                     assertEquals(30, buttons.get(8).getWidth() + buttons.get(9).getWidth());
                     assertEquals(buttons.get(8).getX() + buttons.get(8).getWidth(), buttons.get(9).getX());
@@ -359,6 +362,26 @@ class GridTerminalInteractionTest {
                 } finally { GridTabs.onScreenClosing(closing); }
             }
         } finally { preferenceField.set(null, before); }
+    }
+
+    @Test void onlyTheLastTabAtTheTerminalEdgeLosesTheOnePixelOverhang() {
+        for (int count = 0; count <= 64; count++) {
+            var nav = new CategoryNavigation(java.util.stream.IntStream.range(0, count)
+                .mapToObj(i -> "C" + i).toList(), String::length, GridTabs.HEADER_WIDTH);
+            for (int page = 0; page < nav.count(); page++) {
+                var shown = nav.tabs(page);
+                for (int i = 0; i < shown.size(); i++) {
+                    var tab = shown.get(i);
+                    int width = GridTabs.terminalTabWidth(tab, i == shown.size() - 1);
+                    if (i == shown.size() - 1 && tab.x() == 168) {
+                        assertEquals(25, width);
+                        assertEquals(193, tab.x() + width);
+                    } else assertEquals(26, width);
+                    assertEquals(i * 28, tab.x());
+                    assertEquals(26, tab.width(), "The pagination model itself must remain unchanged");
+                }
+            }
+        }
     }
 
     @Test void categoryStripHitBoxTracksPositionAndExcludesTheNativeInventory() {

@@ -24,9 +24,9 @@ final class CreativeTabPreview {
     private static final ArrayList<Map<String, Object>> measurements = new ArrayList<>();
     static final int CASES = 8;
     static void capture(GuiGraphics graphics, int scale, int scenario) {
-        int[] counts = {1, 1, 7, 7, 8, 8, 13, 13};
+        int[] counts = {1, 1, 6, 6, 8, 8, 13, 13};
         int[] pages = {0, 0, 0, 0, 0, 0, 1, 2};
-        int[] selected = {-1, 0, 5, 6, -1, 5, 11, 12};
+        int[] selected = {-1, 0, -1, 5, -1, 5, 11, 12};
         var window = Minecraft.getInstance().getWindow();
         int x = (window.getGuiScaledWidth() - GridTabs.HEADER_WIDTH) / 2;
         int terminalY = (window.getGuiScaledHeight() - 82) / 2 + 12;
@@ -84,9 +84,10 @@ final class CreativeTabPreview {
             terminalLeft.setAccessible(true);
             icon.setAccessible(true);
             chosen.setAccessible(true);
-            for (var tab : navigation.tabs(page)) {
+            var shown = navigation.tabs(page);
+            for (var tab : shown) {
                 var button = (Button) constructor.newInstance(x + tab.x(), terminalY - 23, (Button.OnPress) b -> {});
-                button.setWidth(tab.width());
+                button.setWidth(GridTabs.terminalTabWidth(tab, tab == shown.getLast()));
                 terminalLeft.setInt(button, x);
                 icon.set(button, new ItemStack(tab.category() < 0 ? Items.GRASS_BLOCK
                     : tab.category() % 2 == 0 ? Items.COPPER_INGOT : Items.APPLE));

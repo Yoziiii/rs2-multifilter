@@ -106,7 +106,7 @@ public final class GridTabs {
                 button.terminalLeft = x;
                 button.chosen = tab.category() == selection.selected();
                 button.setX(x + tab.x());
-                button.setWidth(tab.width());
+                button.setWidth(terminalTabWidth(tab, i == shown.size() - 1));
                 String title = tab.category() < 0 ? "全部" : card.categories().get(tab.category()).name();
                 button.setMessage(Component.literal(title));
                 button.icon = tab.category() < 0 ? new ItemStack(Items.GRASS_BLOCK) : iconFor(card.categories().get(tab.category()).iconItemId());
@@ -130,6 +130,10 @@ public final class GridTabs {
 
     private static int barWidth(AbstractGridScreen<?> screen) {
         return HEADER_WIDTH;
+    }
+    /** Correct only the full row's one-pixel overhang; paging and gaps stay unchanged. */
+    public static int terminalTabWidth(CategoryNavigation.Tab tab, boolean last) {
+        return last && tab.x() + tab.width() == 194 ? tab.width() - 1 : tab.width();
     }
     /** Reserve room for the attached header when RS's minimum 3 rows would overlap it. */
     public static int fitRows(int nativeRows, int viewportHeight, int bottomHeight) {
@@ -180,7 +184,7 @@ public final class GridTabs {
             g.pose().translate(0, 0, 1);
             // Paint after the terminal background: the selected tab's open base
             // bridges only its own part of the terminal's four-pixel top edge.
-            RsUi.iconTab(g, getX(), getY(), chosen, terminalLeft);
+            RsUi.iconTab(g, getX(), getY(), chosen, terminalLeft, getWidth());
             g.renderItem(icon, getX() + 5, getY() + (chosen ? 5 : 6));
             g.pose().popPose();
             // Message is narration/tooltip data only; no label is drawn inside a tab.
