@@ -68,7 +68,7 @@ class CategoryNavigationTest {
         var nav = new CategoryNavigation(names, s -> { throw new AssertionError("Icon tabs must not measure text"); }, 193);
         assertFalse(nav.paginated());
         assertEquals(6, nav.tabs(0).size());
-        assertTrue(nav.tabs(0).stream().allMatch(t -> t.width() == 30));
+        assertTrue(nav.tabs(0).stream().allMatch(t -> t.width() == 26));
         assertEquals(List.of(-1, 0, 1, 2, 3, 4), nav.tabs(0).stream().map(CategoryNavigation.Tab::category).toList());
     }
     @Test void smallGuiScalesReserveHeaderSpaceWithoutOverlappingTheNativeTitle() {
@@ -84,5 +84,51 @@ class CategoryNavigationTest {
         }
         assertEquals(1, GridTabs.fitRows(3, 240, 156));
         assertEquals(2, GridTabs.fitRows(3, 270, 156));
+    }
+
+    @Test void measuredHeaderFitsEightTabsWithoutPagingAndUsesUniformTwoPixelGaps() {
+        assertEquals(227, GridTabs.HEADER_WIDTH);
+        var nav = new CategoryNavigation(IntStream.range(0, 7).mapToObj(i -> "C" + i).toList(), String::length, GridTabs.HEADER_WIDTH);
+        assertFalse(nav.paginated());
+        assertEquals(8, CategoryNavigation.maxVisibleTabs(GridTabs.HEADER_WIDTH));
+        assertEquals(8, nav.tabs(0).size());
+        assertEquals(0, nav.tabs(0).getFirst().x());
+        assertEquals(222, nav.tabs(0).getLast().x() + nav.tabs(0).getLast().width());
+        for (int i = 1; i < 8; i++)
+            assertEquals(2, nav.tabs(0).get(i).x() - nav.tabs(0).get(i - 1).x() - nav.tabs(0).get(i - 1).width());
+    }
+
+    @Test void overflowReservesTwoUnchangedArrowsAndFitsSixCustomCategories() {
+        var nav = new CategoryNavigation(IntStream.range(0, 8).mapToObj(i -> "C" + i).toList(), String::length, GridTabs.HEADER_WIDTH);
+        assertTrue(nav.paginated());
+        assertEquals(2, nav.count());
+        assertEquals(List.of(-1, 0, 1, 2, 3, 4, 5), nav.tabs(0).stream().map(CategoryNavigation.Tab::category).toList());
+        assertEquals(List.of(-1, 6, 7), nav.tabs(1).stream().map(CategoryNavigation.Tab::category).toList());
+        assertEquals(194, nav.tabs(0).getLast().x() + nav.tabs(0).getLast().width());
+        assertEquals(195, nav.previousX());
+        assertEquals(211, nav.nextX());
+        assertEquals(227, nav.nextX() + 16);
+        assertEquals(1, nav.previousX() - 194);
+    }
+
+    @Test void fullAndPartialLastPagesNeverStretchOrRenumberTabs() {
+        for (int count : new int[]{1, 7, 8, 12, 13}) {
+            var nav = new CategoryNavigation(IntStream.range(0, count).mapToObj(i -> "C" + i).toList(), String::length, 227);
+            int expectedPages = count <= 7 ? 1 : (count + 5) / 6;
+            assertEquals(expectedPages, nav.count());
+            var indices = new java.util.ArrayList<Integer>();
+            for (int page = 0; page < nav.count(); page++) {
+                assertEquals(-1, nav.tabs(page).getFirst().category());
+                for (int i = 0; i < nav.tabs(page).size(); i++) {
+                    var tab = nav.tabs(page).get(i);
+                    assertEquals(i * 28, tab.x());
+                    assertEquals(26, tab.width());
+                    if (tab.category() >= 0) indices.add(tab.category());
+                }
+            }
+            assertEquals(IntStream.range(0, count).boxed().toList(), indices);
+            if (count == 12) assertEquals(7, nav.tabs(1).size());
+            if (count == 13) assertEquals(List.of(-1, 12), nav.tabs(2).stream().map(CategoryNavigation.Tab::category).toList());
+        }
     }
 }

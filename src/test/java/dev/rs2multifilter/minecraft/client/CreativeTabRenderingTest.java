@@ -15,9 +15,9 @@ class CreativeTabRenderingTest {
     @Test void selectedOpenBaseCoversOnlyItsOwnFourPixelsOfTheTerminalTopEdge() {
         var graphics = mock(GuiGraphics.class);
         RsUi.iconTab(graphics, 50, 7, true); // Terminal top is 30.
-        verify(graphics).blitSprite(RsUi.TAB_SELECTED, 26, 32, 0, 0, 52, 7, 26, 7);
-        verify(graphics).blitSprite(RsUi.TAB_SELECTED, 26, 32, 0, 7, 52, 14, 26, 16);
-        verify(graphics).blitSprite(RsUi.TAB_SELECTED, 26, 32, 0, 28, 52, 30, 26, 4);
+        verify(graphics).blitSprite(RsUi.TAB_SELECTED, 26, 32, 0, 0, 50, 7, 26, 7);
+        verify(graphics).blitSprite(RsUi.TAB_SELECTED, 26, 32, 0, 7, 50, 14, 26, 16);
+        verify(graphics).blitSprite(RsUi.TAB_SELECTED, 26, 32, 0, 28, 50, 30, 26, 4);
         verify(graphics, never()).fill(anyInt(), anyInt(), anyInt(), anyInt(), anyInt());
         verifyNoMoreInteractions(graphics);
     }
@@ -25,9 +25,9 @@ class CreativeTabRenderingTest {
     @Test void unselectedUsesItsNativeBorderAndStopsBeforeTheTerminalTopEdge() {
         var graphics = mock(GuiGraphics.class);
         RsUi.iconTab(graphics, 82, 7, false);
-        verify(graphics).blitSprite(RsUi.TAB_UNSELECTED, 26, 32, 0, 0, 84, 7, 26, 7);
-        verify(graphics).blitSprite(RsUi.TAB_UNSELECTED, 26, 32, 0, 7, 84, 14, 26, 12);
-        verify(graphics).blitSprite(RsUi.TAB_UNSELECTED, 26, 32, 0, 28, 84, 26, 26, 4);
+        verify(graphics).blitSprite(RsUi.TAB_UNSELECTED, 26, 32, 0, 0, 82, 7, 26, 7);
+        verify(graphics).blitSprite(RsUi.TAB_UNSELECTED, 26, 32, 0, 7, 82, 14, 26, 12);
+        verify(graphics).blitSprite(RsUi.TAB_UNSELECTED, 26, 32, 0, 28, 82, 26, 26, 4);
         verifyNoMoreInteractions(graphics);
     }
 

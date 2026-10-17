@@ -6,7 +6,8 @@ import java.util.function.ToIntFunction;
 
 /** Display-only paging. -1 is All; custom indices are never shifted or rewritten. */
 public final class CategoryNavigation {
-    public static final int GAP = 2, ARROWS = 34, TAB_WIDTH = 30, TAB_HEIGHT = 24;
+    // Seven 26px tabs + six 2px gaps + a 1px separator + two 16px arrows = 227px.
+    public static final int GAP = 2, ARROWS = 33, TAB_WIDTH = 26, TAB_HEIGHT = 24;
     public record Tab(int category, int x, int width) {}
     private final List<List<Tab>> pages;
     private final int width;
@@ -39,6 +40,7 @@ public final class CategoryNavigation {
     }
     public int count() { return pages.size(); }
     public boolean paginated() { return count() > 1; }
+    public static int maxVisibleTabs(int width) { return (width + GAP) / (TAB_WIDTH + GAP); }
     public int clamp(int page) { return Math.max(0, Math.min(page, count() - 1)); }
     public List<Tab> tabs(int page) { return pages.get(clamp(page)); }
     public int previousX() { return width - 32; }

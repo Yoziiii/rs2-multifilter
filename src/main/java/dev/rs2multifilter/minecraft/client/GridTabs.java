@@ -26,6 +26,8 @@ import net.minecraft.client.renderer.Rect2i;
 /** Native-sized gray category strip. Actual cards are rendered by the real menu. */
 @EventBusSubscriber(modid = MultiFilterMod.ID, value = Dist.CLIENT)
 public final class GridTabs {
+    // Match the terminal's left edge and the existing upgrade panel's right edge.
+    public static final int HEADER_WIDTH = 197 + 30;
     private static final Map<AbstractGridScreen<?>, TabState> STATES = new WeakHashMap<>();
     private static GridPreferences preferences;
     private GridTabs() {}
@@ -69,7 +71,7 @@ public final class GridTabs {
         int[] page = {navigation[0].pageFor(selection.selected())};
         Runnable[] refresh = {() -> {}};
         var tabs = new ArrayList<TabButton>();
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < CategoryNavigation.maxVisibleTabs(width); i++) {
             var tab = new TabButton(x, y, b -> {
                 selection.choose(((TabButton)b).category);
                 session.select(selection.selected());
@@ -126,8 +128,7 @@ public final class GridTabs {
     }
 
     private static int barWidth(AbstractGridScreen<?> screen) {
-        int nativeWidth = screen.getXSize() > 0 ? screen.getXSize() : 193;
-        return screen.width > 0 ? Math.min(nativeWidth, Math.max(120, screen.width - screen.getGuiLeft() - 2)) : nativeWidth;
+        return HEADER_WIDTH;
     }
     /** Reserve room for the attached header when RS's minimum 3 rows would overlap it. */
     public static int fitRows(int nativeRows, int viewportHeight, int bottomHeight) {
@@ -178,7 +179,7 @@ public final class GridTabs {
             // Paint after the terminal background: the selected tab's open base
             // bridges only its own part of the terminal's four-pixel top edge.
             RsUi.iconTab(g, getX(), getY(), chosen);
-            g.renderItem(icon, getX() + 7, getY() + (chosen ? 5 : 6));
+            g.renderItem(icon, getX() + 5, getY() + (chosen ? 5 : 6));
             g.pose().popPose();
             // Message is narration/tooltip data only; no label is drawn inside a tab.
         }

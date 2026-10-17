@@ -1,6 +1,7 @@
 package dev.rs2multifilter.smoke;
 
 import dev.rs2multifilter.minecraft.client.CategoryNavigation;
+import dev.rs2multifilter.minecraft.client.GridTabs;
 import dev.rs2multifilter.minecraft.client.RsUi;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
@@ -11,32 +12,62 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.nio.file.Path;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.stream.IntStream;
 
 /** CI-only render samples: actual tab widgets, not a simulated terminal session. */
 final class CreativeTabPreview {
-    static void capture(GuiGraphics graphics) {
+    private static final ArrayList<Map<String, Object>> measurements = new ArrayList<>();
+    static void capture(GuiGraphics graphics, int scale, int scenario) {
+        int[] counts = {1, 7, 8, 13}, pages = {0, 0, 0, 2}, selected = {0, 6, 5, 12};
+        var window = Minecraft.getInstance().getWindow();
+        int x = (window.getGuiScaledWidth() - GridTabs.HEADER_WIDTH) / 2;
+        int terminalY = (window.getGuiScaledHeight() - 82) / 2 + 12;
         graphics.pose().pushPose();
         graphics.pose().translate(0, 0, 400);
-        draw(graphics, 10, 70, 2, 0, 0);
-        draw(graphics, 213, 70, 12, 1, 5);
-        draw(graphics, 213, 155, 12, 2, 10);
+        draw(graphics, x, terminalY, counts[scenario], pages[scenario], selected[scenario]);
+        // Test-only guides mark the measured main-left and upgrade-panel-right boundaries.
+        graphics.fill(x - 1, terminalY - 29, x, terminalY + 83, 0xFF548DE1);
+        graphics.fill(x + GridTabs.HEADER_WIDTH, terminalY - 29,
+            x + GridTabs.HEADER_WIDTH + 1, terminalY + 83, 0xFF548DE1);
         graphics.pose().popPose();
         graphics.flush();
         try (var image = Screenshot.takeScreenshot(Minecraft.getInstance().getMainRenderTarget())) {
-            image.writeToFile(Path.of("creative-tab-preview.png"));
+            String filename = "category-alignment-scale-" + scale + "-case-" + scenario + ".png";
+            image.writeToFile(Path.of(filename));
+            var sample = new LinkedHashMap<String, Object>();
+            sample.put("file", filename);
+            sample.put("requestedScale", scale);
+            sample.put("actualScale", window.getGuiScale());
+            sample.put("framebufferWidth", image.getWidth());
+            sample.put("framebufferHeight", image.getHeight());
+            sample.put("guiWidth", window.getGuiScaledWidth());
+            sample.put("guiHeight", window.getGuiScaledHeight());
+            sample.put("left", x);
+            sample.put("top", terminalY);
+            sample.put("upgradeRight", x + GridTabs.HEADER_WIDTH);
+            sample.put("customCategories", counts[scenario]);
+            sample.put("page", pages[scenario]);
+            measurements.add(sample);
+            Files.writeString(Path.of("category-alignment-measurements.json"),
+                new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(measurements), StandardCharsets.UTF_8);
         } catch (Exception error) {
             throw new IllegalStateException("Unable to capture tab render regression sample", error);
         }
-        System.out.println("RS2MF_CREATIVE_TAB_RENDER_OK");
+        System.out.println("RS2MF_CREATIVE_TAB_RENDER_OK scale=" + window.getGuiScale() + " case=" + scenario);
     }
 
     private static void draw(GuiGraphics graphics, int x, int terminalY, int count, int page, int selected) {
         var names = IntStream.range(0, count).mapToObj(i -> "C" + i).toList();
-        var navigation = new CategoryNavigation(names, String::length, 193);
+        var navigation = new CategoryNavigation(names, String::length, GridTabs.HEADER_WIDTH);
         var font = Minecraft.getInstance().font;
         graphics.drawString(font, count + " categories / page " + (page + 1), x, terminalY - 36, 0xFFFFFF, false);
         RsUi.panel(graphics, x, terminalY, 193, 36);
+        graphics.blit(RsUi.FILTER, x + 197, terminalY, 180, 0, 30, 82);
         graphics.drawString(font, "RS panel edge", x + 6, terminalY + 9, 0x404648, false);
         try {
             var type = Class.forName("dev.rs2multifilter.minecraft.client.GridTabs$TabButton");
@@ -48,6 +79,7 @@ final class CreativeTabPreview {
             chosen.setAccessible(true);
             for (var tab : navigation.tabs(page)) {
                 var button = (Button) constructor.newInstance(x + tab.x(), terminalY - 23, (Button.OnPress) b -> {});
+                button.setWidth(tab.width());
                 icon.set(button, new ItemStack(tab.category() < 0 ? Items.GRASS_BLOCK
                     : tab.category() % 2 == 0 ? Items.COPPER_INGOT : Items.APPLE));
                 chosen.setBoolean(button, tab.category() == selected);

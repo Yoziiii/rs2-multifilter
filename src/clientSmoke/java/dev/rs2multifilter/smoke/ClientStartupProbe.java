@@ -16,6 +16,7 @@ public final class ClientStartupProbe {
     private static boolean passed;
     private static EditBox vanilla;
     private static CardEditorScreen.NameField name;
+    private static int previewIndex, scaleWaitFrames;
 
     @SubscribeEvent
     public static void titleReady(ScreenEvent.Init.Post event) {
@@ -35,12 +36,22 @@ public final class ClientStartupProbe {
     @SubscribeEvent
     public static void titleRendered(ScreenEvent.Render.Post event) {
         if (passed || name == null || !(event.getScreen() instanceof TitleScreen)) return;
+        var client = Minecraft.getInstance();
+        int scale = previewIndex < 4 ? 2 : 3;
+        if (Math.abs(client.getWindow().getGuiScale() - scale) > 0.01) {
+            if (++scaleWaitFrames > 30) throw new IllegalStateException("Cannot reach GUI scale " + scale);
+            client.options.guiScale().set(scale);
+            client.resizeDisplay();
+            return;
+        }
+        scaleWaitFrames = 0;
         vanilla.renderWidget(event.getGuiGraphics(), 0, 0, 0);
         name.renderWidget(event.getGuiGraphics(), 0, 0, 0);
-        CreativeTabPreview.capture(event.getGuiGraphics());
+        CreativeTabPreview.capture(event.getGuiGraphics(), scale, previewIndex % 4);
+        if (++previewIndex < 8) return;
         passed = true;
         System.out.println("RS2MF_CLIENT_SMOKE_TITLE_READY_EDITBOX_OK");
-        var client = Minecraft.getInstance();
+        System.out.println("RS2MF_CATEGORY_ALIGNMENT_SCALES_OK");
         client.execute(client::stop);
     }
 }

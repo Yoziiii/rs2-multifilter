@@ -74,7 +74,7 @@ jobs:
           exit 1
       - name: NeoForge client startup and EditBox smoke test
         run: |
-          printf 'onboardAccessibility:false\n' > run/options.txt
+          printf 'onboardAccessibility:false\noverrideWidth:1280\noverrideHeight:720\nguiScale:2\n' > run/options.txt
           set +e
           ALSOFT_DRIVERS=null timeout 240s xvfb-run -a -s '-screen 0 1280x720x24' gradle runClient -PclientSmoke=true --console=plain > client-smoke.log 2>&1
           CLIENT_EXIT=$?
@@ -83,6 +83,7 @@ jobs:
           test "$CLIENT_EXIT" = "0"
           grep -Fq 'RS2MF_CLIENT_SMOKE_TITLE_READY_EDITBOX_OK' client-smoke.log
           grep -Fq 'RS2MF_CREATIVE_TAB_RENDER_OK' client-smoke.log
+          grep -Fq 'RS2MF_CATEGORY_ALIGNMENT_SCALES_OK' client-smoke.log
           if grep -E 'Critical injection failure|Mixin apply.*failed|Failed to create mod instance' client-smoke.log; then
             exit 1
           fi
@@ -93,7 +94,8 @@ jobs:
           name: client-startup-log
           path: |
             client-smoke.log
-            run/creative-tab-preview.png
+            run/category-alignment-*.png
+            run/category-alignment-measurements.json
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:

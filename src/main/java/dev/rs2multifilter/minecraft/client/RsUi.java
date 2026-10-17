@@ -32,13 +32,13 @@ public final class RsUi {
         g.blitSprite(id("slot"), x - 1, y - 1, 18, 18);
     }
     /** Vanilla creative tabs, compacted vertically by skipping plain middle rows.
-     * Preserve native pixels, the existing 30x24 layout, and the icon's position.
+     * Keep native 26px artwork; callers own the tab's position and spacing.
      * Selected extends four pixels into the panel; unselected stops above it. */
     public static void iconTab(GuiGraphics g, int x, int y, boolean selected) {
         ResourceLocation sprite = selected ? TAB_SELECTED : TAB_UNSELECTED;
         int height = selected ? 27 : 23;
-        g.blitSprite(sprite, 26, 32, 0, 0, x + 2, y, 26, 7);
-        g.blitSprite(sprite, 26, 32, 0, 7, x + 2, y + 7, 26, height - 11);
-        g.blitSprite(sprite, 26, 32, 0, 28, x + 2, y + height - 4, 26, 4);
+        g.blitSprite(sprite, 26, 32, 0, 0, x, y, 26, 7);
+        g.blitSprite(sprite, 26, 32, 0, 7, x, y + 7, 26, height - 11);
+        g.blitSprite(sprite, 26, 32, 0, 28, x, y + height - 4, 26, 4);
     }
 }
