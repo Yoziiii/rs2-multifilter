@@ -6,6 +6,7 @@ import com.refinedmods.refinedstorage.common.grid.screen.AbstractGridScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -77,12 +78,12 @@ public final class GridTabs {
             tabs.add(tab);
             event.addListener(tab);
         }
-        var previous = new EditorButton(x + navigation[0].previousX(), y + 3, 16, 18,
-            Component.literal("上一页分类"), b -> { page[0] = navigation[0].clamp(page[0] - 1); refresh[0].run(); });
-        previous.setIcon(EditorIcon.PREVIOUS);
-        var next = new EditorButton(x + navigation[0].nextX(), y + 3, 16, 18,
-            Component.literal("下一页分类"), b -> { page[0] = navigation[0].clamp(page[0] + 1); refresh[0].run(); });
-        next.setIcon(EditorIcon.NEXT);
+        var previous = Button.builder(Component.literal("<"),
+            b -> { page[0] = navigation[0].clamp(page[0] - 1); refresh[0].run(); })
+            .bounds(x + navigation[0].previousX(), y + 3, 16, 18).build();
+        var next = Button.builder(Component.literal(">"),
+            b -> { page[0] = navigation[0].clamp(page[0] + 1); refresh[0].run(); })
+            .bounds(x + navigation[0].nextX(), y + 3, 16, 18).build();
         event.addListener(previous);
         event.addListener(next);
         refresh[0] = () -> {
@@ -172,12 +173,12 @@ public final class GridTabs {
             super(x, y, CategoryNavigation.TAB_WIDTH, CategoryNavigation.TAB_HEIGHT, Component.literal("全部"), press);
         }
         @Override protected void renderWidget(GuiGraphics g, int mx, int my, float tick) {
-            RsUi.iconTab(g, getX(), getY());
             g.pose().pushPose();
             g.pose().translate(0, 0, 1);
-            if (chosen || isHoveredOrFocused()) g.fill(getX() + 7, getY() + 4,
-                getX() + 23, getY() + 20, chosen ? 0xFFBDD0D6 : 0xFFA8A8A8);
-            g.renderItem(icon, getX() + 7, getY() + 4);
+            // Paint after the terminal background: the selected tab's open base
+            // bridges only its own part of the terminal's four-pixel top edge.
+            RsUi.iconTab(g, getX(), getY(), chosen);
+            g.renderItem(icon, getX() + 7, getY() + (chosen ? 5 : 6));
             g.pose().popPose();
             // Message is narration/tooltip data only; no label is drawn inside a tab.
         }

@@ -82,6 +82,7 @@ jobs:
           tail -n 100 client-smoke.log
           test "$CLIENT_EXIT" = "0"
           grep -Fq 'RS2MF_CLIENT_SMOKE_TITLE_READY_EDITBOX_OK' client-smoke.log
+          grep -Fq 'RS2MF_CREATIVE_TAB_RENDER_OK' client-smoke.log
           if grep -E 'Critical injection failure|Mixin apply.*failed|Failed to create mod instance' client-smoke.log; then
             exit 1
           fi
@@ -90,7 +91,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: client-startup-log
-          path: client-smoke.log
+          path: |
+            client-smoke.log
+            run/creative-tab-preview.png
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:

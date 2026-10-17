@@ -6,6 +6,10 @@ import net.minecraft.resources.ResourceLocation;
 /** Reuse RS 2.0.9's own panel corners/edges and its opaque 18px slot sprite. */
 public final class RsUi {
     public static final ResourceLocation FILTER = id("textures/gui/generic_filter.png");
+    public static final ResourceLocation TAB_SELECTED = ResourceLocation.withDefaultNamespace(
+        "container/creative_inventory/tab_top_selected_2");
+    public static final ResourceLocation TAB_UNSELECTED = ResourceLocation.withDefaultNamespace(
+        "container/creative_inventory/tab_top_unselected_2");
     public static ResourceLocation id(String path) { return ResourceLocation.fromNamespaceAndPath("refinedstorage", path); }
     private RsUi() {}
 
@@ -27,10 +31,14 @@ public final class RsUi {
     public static void slot(GuiGraphics g, int x, int y) {
         g.blitSprite(id("slot"), x - 1, y - 1, 18, 18);
     }
-    /** Independent compact cap from the same native panel as the four upgrade slots. */
-    public static void iconTab(GuiGraphics g, int x, int y) {
-        g.blit(FILTER, x, y, 180, 0, 30, 3);
-        g.blit(FILTER, x, y + 3, 180, 5, 30, 18);
-        g.blit(FILTER, x, y + 21, 180, 79, 30, 3);
+    /** Vanilla creative tabs, compacted vertically by skipping plain middle rows.
+     * Preserve native pixels, the existing 30x24 layout, and the icon's position.
+     * Selected extends four pixels into the panel; unselected stops above it. */
+    public static void iconTab(GuiGraphics g, int x, int y, boolean selected) {
+        ResourceLocation sprite = selected ? TAB_SELECTED : TAB_UNSELECTED;
+        int height = selected ? 27 : 23;
+        g.blitSprite(sprite, 26, 32, 0, 0, x + 2, y, 26, 7);
+        g.blitSprite(sprite, 26, 32, 0, 7, x + 2, y + 7, 26, height - 11);
+        g.blitSprite(sprite, 26, 32, 0, 28, x + 2, y + height - 4, 26, 4);
     }
 }

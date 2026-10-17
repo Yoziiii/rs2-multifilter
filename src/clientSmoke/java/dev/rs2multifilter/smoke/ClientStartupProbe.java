@@ -37,6 +37,7 @@ public final class ClientStartupProbe {
         if (passed || name == null || !(event.getScreen() instanceof TitleScreen)) return;
         vanilla.renderWidget(event.getGuiGraphics(), 0, 0, 0);
         name.renderWidget(event.getGuiGraphics(), 0, 0, 0);
+        CreativeTabPreview.capture(event.getGuiGraphics());
         passed = true;
         System.out.println("RS2MF_CLIENT_SMOKE_TITLE_READY_EDITBOX_OK");
         var client = Minecraft.getInstance();
