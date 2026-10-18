@@ -2,6 +2,7 @@ package dev.rs2multifilter.core;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 /** Categories support Create-style OR whitelist, AND whitelist and blacklist. */
 public record FilterCategory(String name, String iconItemId, List<FilterRule> rules, Mode mode) {
@@ -21,12 +22,17 @@ public record FilterCategory(String name, String iconItemId, List<FilterRule> ru
     }
 
     public boolean matches(FilterRule.ResourceView item) {
+        return matches(rule -> rule.matches(item));
+    }
+
+    /** Shared rule combination for both pure data and the actual RS resource view. */
+    public boolean matches(Predicate<FilterRule> matcher) {
         if (rules.isEmpty()) return false;
         boolean hasInclude = false;
         boolean any = false;
         boolean all = true;
         for (FilterRule rule : rules) {
-            boolean match = rule.matches(item);
+            boolean match = matcher.test(rule);
             if (rule.exclude()) {
                 if (match) return false;
             } else {

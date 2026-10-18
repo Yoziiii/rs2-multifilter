@@ -2,10 +2,10 @@ name: NeoForge 1.21.1 Build
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, codex/create-menu-phase1, codex/interaction-phase2, codex/create-ui-phase3, codex/create-interaction-rework, codex/ui-polish, codex/native-tabs-final, codex/icon-tabs-correction]
 
 concurrency:
-  group: rs2-multifilter-build
+  group: rs2-multifilter-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -24,6 +24,15 @@ jobs:
           gradle-version: '8.14'
       - name: Compile and test
         run: gradle build --stacktrace
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            build/test-results/test/
+            build/reports/tests/test/
+          if-no-files-found: ignore
       - name: Verify packaged NeoForge mod
         run: |
           JAR=$(find build/libs -maxdepth 1 -type f -name 'rs2multifilter-*.jar' | head -n 1)
@@ -63,6 +72,31 @@ jobs:
           fi
           echo "NeoForge server failed to reach Done."
           exit 1
+      - name: NeoForge client startup and EditBox smoke test
+        run: |
+          printf 'onboardAccessibility:false\nguiScale:2\n' > run/options.txt
+          set +e
+          ALSOFT_DRIVERS=null timeout 240s xvfb-run -a -s '-screen 0 1280x720x24' gradle runClient -PclientSmoke=true --console=plain > client-smoke.log 2>&1
+          CLIENT_EXIT=$?
+          set -e
+          tail -n 100 client-smoke.log
+          test "$CLIENT_EXIT" = "0"
+          grep -Fq 'RS2MF_CLIENT_SMOKE_TITLE_READY_EDITBOX_OK' client-smoke.log
+          grep -Fq 'RS2MF_CREATIVE_TAB_RENDER_OK' client-smoke.log
+          grep -Fq 'RS2MF_CATEGORY_ALIGNMENT_SCALES_OK' client-smoke.log
+          if grep -E 'Critical injection failure|Mixin apply.*failed|Failed to create mod instance' client-smoke.log; then
+            exit 1
+          fi
+      - name: Upload client startup log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-startup-log
+          path: |
+            client-smoke.log
+            run/category-alignment-*.png
+            run/category-alignment-measurements.json
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: rs2multifilter-jar

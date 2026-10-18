@@ -1,4 +1,4 @@
 {
-  "item.rs2multifilter.filter_card": "Multi-category Filter Card",
-  "item.rs2multifilter.filter_card.desc": "Right-click to edit; insert into an RS grid's card slot for filter tabs"
+  "item.rs2multifilter.filter_card": "Filter Upgrade",
+  "item.rs2multifilter.filter_card.desc": "Right-click to edit; install in a Refined Storage grid to filter by category"
 }

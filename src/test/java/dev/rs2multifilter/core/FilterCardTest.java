@@ -6,6 +6,18 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FilterCardTest {
+    @Test void defaultCategoryIsEditorOnlyIdempotentAndPreservesExistingConfigurations() {
+        var blank = FilterCard.blank();
+        assertTrue(blank.categories().isEmpty());
+        var draft = blank.forEditing();
+        assertEquals(1, draft.categories().size());
+        assertEquals("分类1", draft.categories().getFirst().name());
+        assertEquals(draft, CardWireCodec.decode(CardWireCodec.encode(draft)));
+        assertSame(draft, draft.forEditing());
+        var custom = blank.withCategory(new FilterCategory("已有", "minecraft:stone", List.of()));
+        assertSame(custom, custom.forEditing());
+        assertEquals(draft, new FilterCard(FilterCard.VERSION, List.of()).forEditing());
+    }
     private static FilterRule.ResourceView item(String id, String... tags) {
         return new FilterRule.ResourceView(id, Set.of(tags));
     }

@@ -9,13 +9,17 @@
   },
   "client": [
     "GridSearchMixin",
-    "RepositoryFilterAccessor",
+    "GridPanelBackgroundMixin",
     "GridSlotOutsideClickMixin"
   ],
   "mixins": [
     "GridCardStorageMixin",
+    "GridCardRemovalMixin",
     "GridMenuAccessor",
     "ResourceMenuSlotInvoker",
-    "GridNativeSlotsMixin"
+    "GridNativeSlotsMixin",
+    "GridCardQuickMoveMixin",
+    "RepositoryFilterAccessor",
+    "RepositorySuspensionMixin"
   ]
 }

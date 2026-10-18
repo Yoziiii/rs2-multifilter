@@ -2,17 +2,22 @@ package dev.rs2multifilter.minecraft.client;
 
 import dev.rs2multifilter.core.*;
 import dev.rs2multifilter.minecraft.network.SaveCardPayload;
-import net.minecraft.client.Minecraft;
+import dev.rs2multifilter.minecraft.menu.CardEditorMenu;
+import dev.rs2multifilter.minecraft.menu.CardEditorLayout;
+import dev.rs2multifilter.minecraft.menu.CardEditorLayout.Rect;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
-import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.Slot;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -20,132 +25,206 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/**
- * Classic compact RS filter configuration with Create 6.0-style inline attribute
- * selection: sample ghost slot, scrollable attributes, +/- each rule, OR/AND/DENY.
- * All editing happens on ONE screen; no secondary attribute picker screen.
- */
-public final class CardEditorScreen extends Screen {
-    private static final int W = 388;
-    private static final int H = 273;
-    private static final int ATTRIBUTE_ROWS = 5;
-    private static final int RULE_ROWS = 3;
+import static dev.rs2multifilter.minecraft.menu.CardEditorLayout.*;
+
+/** Create-style compact configuration above the existing real inventory menu. */
+public final class CardEditorScreen extends AbstractContainerScreen<CardEditorMenu> {
+    private static final int W = CardEditorLayout.WIDTH, H = CardEditorLayout.HEIGHT;
+    private static final int RULE_ROWS = 5, RULE_ROW_HEIGHT = 14;
     private FilterCard working;
-    private int category = -1;
-    private int attributePage;
-    private int rulePage;
-    private ItemStack sample = ItemStack.EMPTY;
-    private ItemStack dragged = ItemStack.EMPTY;
-    private boolean fuzzy = true;
+    private int category = -1, displayedCategory = -2, attributeIndex, ruleOffset;
+    private ItemStack sample = ItemStack.EMPTY, dragged = ItemStack.EMPTY;
+    private boolean fuzzy = true, isError, ruleMouseDown;
     private EditBox name;
+    private AttributeSelector selector;
+    private EditorButton includeButton, excludeButton;
     private String notice = "";
-    private boolean isError;
+    private int noticeTicks;
+    private Rect ruleArea;
+    private final List<AbstractWidget> ruleWidgets = new ArrayList<>();
     private final List<AttributeOption> attributes = new ArrayList<>();
 
     private record AttributeOption(Component title, FilterRule.Kind kind, String value) {}
 
-    public CardEditorScreen(FilterCard initial) {
-        super(Component.literal("过滤升级"));
-        this.working = initial;
-        if (!initial.categories().isEmpty()) category = 0;
+    public CardEditorScreen(CardEditorMenu menu, Inventory inventory, Component title) {
+        super(menu, inventory, title);
+        imageWidth = W;
+        imageHeight = H;
+        working = menu.initialCard();
+        if (!working.categories().isEmpty()) category = 0;
     }
 
-    private int left() { return (width - W) / 2; }
-    private int top() { return (height - H) / 2; }
+    /** NeoForge provides this setting; no vanilla renderer injection is needed. */
+    public static final class NameField extends EditBox {
+        public NameField(net.minecraft.client.gui.Font font, int x, int y, int w, int h, Component label) {
+            super(font, x, y, w, h, label);
+            setTextShadow(false);
+        }
+    }
+
+    private int left() { return leftPos; }
+    private int top() { return topPos; }
 
     @Override protected void init() {
-        int x = left(), y = top();
-        name = new EditBox(font, x + 49, y + 28, 119, 18,
+        String draft = name != null && displayedCategory == category ? name.getValue()
+            : hasCategory() ? current().name() : "";
+        super.init();
+        name = new NameField(font, left() + NAME.x() + 4, top() + NAME.y() + 5, NAME.width() - 8, 9,
             Component.literal("分类名称"));
+        name.setBordered(false);
+        name.setTextColor(0xFF404648);
+        name.setTextColorUneditable(0xFF858580);
+        name.setTooltip(Tooltip.create(Component.literal("编辑分类名称；切换、添加规则或保存时应用")));
         name.setMaxLength(32);
+        name.setValue(draft);
+        name.setEditable(hasCategory());
         addRenderableWidget(name);
-        if (hasCategory()) name.setValue(current().name());
-        else { name.setValue(""); name.setEditable(false); }
+        displayedCategory = category;
+        iconButton(PREVIOUS, EditorIcon.PREVIOUS, "上一个分类", () -> moveCategory(-1)).active = hasCategory();
+        iconButton(NEXT, EditorIcon.NEXT, "下一个分类", () -> moveCategory(1)).active = hasCategory();
+        iconButton(NEW_CATEGORY, EditorIcon.FOLDER, "新建分类", this::addCategory);
+        iconButton(DELETE_CATEGORY, EditorIcon.TRASH, "删除当前分类及其规则", this::deleteCategory).active = hasCategory();
 
-        addButton(x + 171, y + 28, 18, 18, "‹", "上一个分类", () -> moveCategory(-1));
-        addButton(x + 190, y + 28, 18, 18, "›", "下一个分类", () -> moveCategory(1));
-        addButton(x + 211, y + 28, 55, 18, "+ 分类", "新建分类", this::addCategory);
-        addButton(x + 269, y + 28, 48, 18, "删除", "删除当前分类", this::deleteCategory);
-        addButton(x + 320, y + 27, 58, 20, "保存", "保存所有分类至过滤卡", this::saveCard);
+        selector = new AttributeSelector(left() + ATTRIBUTE.x(), top() + ATTRIBUTE.y(),
+            ATTRIBUTE.width(), ATTRIBUTE.height(), this::copy, index -> {
+                attributeIndex = index;
+                updateAddButtons();
+            });
+        selector.setOptions(attributes.stream().map(option -> new AttributeSelector.Entry(option.title(),
+            RuleClipboard.describe(option.kind(), option.title().getString(), option.value(), null),
+            ruleTooltip(option.kind(), option.title().getString(), option.value(), null))).toList(), attributeIndex);
+        attributeIndex = selector.selectedIndex();
+        addRenderableWidget(selector);
+        includeButton = button(INCLUDE, "+", "添加普通词条：按当前过滤模式参与匹配", () -> addSelected(false));
+        excludeButton = button(EXCLUDE, "+!", "添加反向词条：排除匹配该属性的物品", () -> addSelected(true));
+        includeButton.setSelected(true);
+        excludeButton.setSelected(true);
+        excludeButton.setAccent(0xFF9A6852);
+        includeButton.setIcon(EditorIcon.ADD);
+        excludeButton.setIcon(EditorIcon.EXCLUDE);
+        updateAddButtons();
 
-        addButton(x + 107, y + 77, 70, 18, "设为图标", "使用样本物品的图标",
-            this::useSampleAsIcon);
-        addButton(x + 11, y + 213, 166, 20,
-            fuzzy ? "物品匹配：模糊 ✓" : "物品匹配：精确 ✓",
-            "模糊：忽略附魔、耐久和组件数据；精确：这些数据必须完全相同",
-            this::toggleFuzzy);
-        addButton(x + 11, y + 237, 166, 19, "清空参考物品",
-            "仅清除参考物品，不删除已添加的规则",
-            () -> { sample = ItemStack.EMPTY; refreshOptions(); rebuildWidgets(); });
+        FilterCategory.Mode mode = hasCategory() ? current().mode() : FilterCategory.Mode.ANY;
+        modeButton(ANY, "或", FilterCategory.Mode.ANY, mode,
+            "任意：满足任一普通词条，且不匹配排除词条");
+        modeButton(ALL, "且", FilterCategory.Mode.ALL, mode,
+            "全部：满足全部普通词条，且不匹配排除词条");
+        modeButton(DENY, "非", FilterCategory.Mode.DENY, mode,
+            "黑名单：匹配普通词条的物品会被排除；排除词条始终排除");
+        var fuzzyButton = iconButton(FUZZY, fuzzy ? EditorIcon.FUZZY : EditorIcon.EXACT,
+            (fuzzy ? "当前：模糊匹配\n" : "当前：精确匹配\n")
+                + "模糊：忽略附魔、耐久等数据；精确：这些数据必须相同。切换会转换已有物品规则", this::toggleFuzzy);
+        fuzzyButton.setSelected(fuzzy);
+        iconButton(ICON, EditorIcon.PICTURE, "将参考物品设为当前分类图标", this::useSampleAsIcon)
+            .active = hasCategory() && !sample.isEmpty();
+        iconButton(CLEAR_RULES, EditorIcon.CLEAR, "清空当前分类的全部规则，保留分类与参考物品", this::clearRules)
+            .active = hasCategory() && !current().rules().isEmpty();
+        iconButton(SAVE, EditorIcon.CONFIRM, "保存所有分类至过滤升级", this::saveCard);
+        rebuildRulePanel();
+    }
 
-        FilterCategory.Mode currentMode = hasCategory()
-            ? current().mode() : FilterCategory.Mode.ANY;
-        addMode(x + 191, y + 57, 58, "任意", FilterCategory.Mode.ANY, currentMode);
-        addMode(x + 251, y + 57, 59, "全部", FilterCategory.Mode.ALL, currentMode);
-        addMode(x + 312, y + 57, 65, "黑名单", FilterCategory.Mode.DENY, currentMode);
+    private EditorButton button(Rect r, String label, String hint, Runnable action) {
+        var button = new EditorButton(left() + r.x(), top() + r.y(), r.width(), r.height(),
+            Component.literal(label), b -> action.run());
+        button.setTooltip(Tooltip.create(Component.literal(hint)));
+        return addRenderableWidget(button);
+    }
 
-        final int maxAttributesPage = maxPage(attributes.size(), ATTRIBUTE_ROWS);
-        attributePage = Math.max(0, Math.min(attributePage, maxAttributesPage));
-        addButton(x + 343, y + 78, 17, 15, "‹", "上一页属性",
-            () -> pageAttributes(-1));
-        addButton(x + 361, y + 78, 17, 15, "›", "下一页属性",
-            () -> pageAttributes(1));
-        for (int index = 0; index < ATTRIBUTE_ROWS; index++) {
-            int item = attributePage * ATTRIBUTE_ROWS + index;
-            if (item >= attributes.size()) break;
-            AttributeOption option = attributes.get(item);
-            final int yy = y + 96 + 18 * index;
-            Component full = option.title();
-            addButton(x + 191, yy, 142, 17, shorten(full.getString(), 22),
-                full.getString() + " (从参考物品识别)", () -> addRule(option, false));
-            addButton(x + 336, yy, 20, 17, "+", "添加包含条件", () -> addRule(option, false));
-            addButton(x + 358, yy, 20, 17, "−", "添加排除条件", () -> addRule(option, true));
+    private void modeButton(Rect r, String label, FilterCategory.Mode mode,
+                            FilterCategory.Mode selected, String hint) {
+        var button = button(r, label, hint, () -> changeMode(mode));
+        button.setIcon(switch (mode) {
+            case ANY -> EditorIcon.ANY;
+            case ALL -> EditorIcon.ALL;
+            case DENY -> EditorIcon.DENY;
+        });
+        button.setSelected(mode == selected);
+        button.active = hasCategory();
+    }
+
+    private EditorButton iconButton(Rect r, EditorIcon icon, String hint, Runnable action) {
+        var button = button(r, hint, hint, action);
+        button.setIcon(icon);
+        return button;
+    }
+
+    private void copy(String text) {
+        if (minecraft != null) {
+            minecraft.keyboardHandler.setClipboard(text);
+            message("已复制", false);
         }
+    }
 
-        if (hasCategory()) {
-            List<FilterRule> rules = current().rules();
-            rulePage = Math.max(0, Math.min(rulePage, maxPage(rules.size(), RULE_ROWS)));
-            for (int index = 0; index < RULE_ROWS; index++) {
-                int target = rulePage * RULE_ROWS + index;
-                if (target >= rules.size()) break;
-                FilterRule rule = rules.get(target);
-                String label = (rule.exclude() ? "− " : "+ ") + ruleDescription(rule);
-                int yy = y + 209 + index * 17;
-                addButton(x + 191, yy, 162, 16, shorten(label, 22),
-                    label + "（点击可查看规则，右侧 × 删除）", () -> message(label, false));
-                addButton(x + 355, yy, 23, 16, "×", "删除这条规则",
-                    () -> deleteRule(target));
-            }
+    private Component ruleTooltip(FilterRule.Kind kind, String label, String value, Boolean excluded) {
+        return Component.literal(String.join("\n", RuleClipboard.tooltip(kind, label, value, excluded)));
+    }
+
+    private void addSelected(boolean exclude) {
+        if (attributeIndex >= 0 && attributeIndex < attributes.size())
+            addRule(attributes.get(attributeIndex), exclude);
+    }
+
+    private void updateAddButtons() {
+        if (includeButton == null || excludeButton == null) return;
+        boolean ready = hasCategory() && attributeIndex >= 0 && attributeIndex < attributes.size();
+        includeButton.active = ready;
+        excludeButton.active = ready;
+        if (ready) {
+            var option = attributes.get(attributeIndex);
+            includeButton.active = !hasRule(option, false);
+            excludeButton.active = !hasRule(option, true);
         }
-        addButton(x + 333, y + 190, 21, 16, "‹", "上一页已选规则", () -> pageRules(-1));
-        addButton(x + 356, y + 190, 22, 16, "›", "下一页已选规则", () -> pageRules(1));
     }
 
-    private void addButton(int x, int y, int w, int h, String label,
-                           String tooltip, Runnable action) {
-        addRenderableWidget(Button.builder(Component.literal(label), b -> action.run())
-            .bounds(x, y, w, h)
-            .tooltip(Tooltip.create(Component.literal(tooltip))).build());
+    private boolean hasRule(AttributeOption option, boolean exclude) {
+        return current().rules().stream().anyMatch(rule -> rule.kind() == option.kind()
+            && rule.value().equals(option.value()) && rule.exclude() == exclude);
     }
-    private void addMode(int x, int y, int w, String title,
-                         FilterCategory.Mode mode, FilterCategory.Mode active) {
-        addButton(x, y, w, 18, (active == mode ? "● " : "○ ") + title,
-            switch (mode) {
-                case ANY -> "任意一条包含规则符合即可显示";
-                case ALL -> "必须符合全部包含规则才显示";
-                case DENY -> "匹配包含规则的物品会被排除";
-            }, () -> changeMode(mode));
+
+    private void clearRules() {
+        if (!hasCategory() || !commitName()) return;
+        var old = current();
+        replace(new FilterCategory(old.name(), old.iconItemId(), List.of(), old.mode()));
+        ruleOffset = 0;
+        message("已清空当前分类规则", false);
+        rebuildWidgets();
     }
+
+    private void rebuildRulePanel() {
+        ruleWidgets.clear();
+        ruleArea = new Rect(left() + RULE_LIST.x(), top() + RULE_LIST.y(), RULE_LIST.width(), RULE_LIST.height());
+        if (!hasCategory()) return;
+        var rules = current().rules();
+        ruleOffset = Math.max(0, Math.min(ruleOffset, Math.max(0, rules.size() - RULE_ROWS)));
+        for (int row = 0; row < RULE_ROWS && ruleOffset + row < rules.size(); row++) {
+            int target = ruleOffset + row;
+            FilterRule rule = rules.get(target);
+            String title = ruleDescription(rule);
+            int yy = ruleArea.y() + row * RULE_ROW_HEIGHT;
+            var entry = new RuleEntryButton(ruleArea.x(), yy, ruleArea.width() - 16, 13,
+                Component.literal((rule.exclude() ? "− " : "+ ") + title), b -> {},
+                RuleClipboard.describe(rule.kind(), title, rule.value(), rule.exclude()), this::copy);
+            entry.setCompact(true);
+            entry.setAccent(rule.exclude() ? 0xFF9A6852 : 0xFF348C56);
+            ruleWidgets.add(entry);
+            var delete = new EditorButton(ruleArea.x() + ruleArea.width() - 14, yy, 13, 13,
+                Component.literal("×"), b -> deleteRule(target));
+            delete.setCompact(true);
+            delete.setIcon(EditorIcon.TRASH);
+            ruleWidgets.add(delete);
+        }
+    }
+
+    List<Component> candidateTooltipAt(double mx, double my, int visibleEntries) {
+        if (selector == null || !selector.isMouseOver(mx, my)) return List.of();
+        return selector.hoverLines(sample.isEmpty() ? Component.literal("参考物品") : sample.getHoverName(), visibleEntries);
+    }
+
     private boolean hasCategory() {
         return category >= 0 && category < working.categories().size();
     }
     private FilterCategory current() { return working.categories().get(category); }
-    private void message(String text, boolean error) { notice = text; isError = error; }
-    private static int maxPage(int size, int pageSize) { return Math.max(0, (size - 1) / pageSize); }
-    private static String shorten(String text, int limit) {
-        return text.length() <= limit ? text : text.substring(0, Math.max(0,limit - 1)) + "…";
-    }
-
+    private void message(String text, boolean error) { notice = text; isError = error; noticeTicks = 40; }
     private boolean commitName() {
         if (!hasCategory()) return true;
         String changed = name.getValue().trim();
@@ -169,14 +248,15 @@ public final class CardEditorScreen extends Screen {
     private void addCategory() {
         if (!commitName()) return;
         if (working.categories().size() >= FilterCard.MAX_PER_CARD) {
-            message("一张过滤卡最多 64 个分类", true); return;
+            message("一个过滤升级最多 64 个分类", true); return;
         }
         String icon = sample.isEmpty() ? "minecraft:paper" : itemId(sample).toString();
         working = working.withCategory(new FilterCategory(
             "分类 " + (working.categories().size()+1), icon, List.of()));
         category = working.categories().size()-1;
-        rulePage = 0;
-        message("选择背包中的物品，拖到参考槽，点击右侧属性 + 添加", false);
+        ruleOffset = 0;
+        displayedCategory = -2;
+        message("从背包点选样本，滚轮选择属性，再点击添加", false);
         rebuildWidgets();
     }
     private void deleteCategory() {
@@ -185,13 +265,15 @@ public final class CardEditorScreen extends Screen {
         list.remove(category);
         working = new FilterCard(FilterCard.VERSION, list);
         category = list.isEmpty() ? -1 : Math.min(category, list.size()-1);
-        rulePage = 0;
+        ruleOffset = 0;
+        displayedCategory = -2;
         rebuildWidgets();
     }
     private void moveCategory(int direction) {
         if (!commitName() || working.categories().isEmpty()) return;
         category = Math.floorMod(category + direction, working.categories().size());
-        rulePage = 0;
+        ruleOffset = 0;
+        displayedCategory = -2;
         rebuildWidgets();
     }
     private void changeMode(FilterCategory.Mode mode) {
@@ -229,7 +311,7 @@ public final class CardEditorScreen extends Screen {
             replace(new FilterCategory(old.name(), old.iconItemId(), changed, old.mode()));
             message((fuzzy ? "模糊匹配" : "精确匹配") + "；更新了 " + converted + " 条物品规则", false);
         }
-        attributePage = 0;
+        attributeIndex = 0;
         refreshOptions();
         rebuildWidgets();
     }
@@ -256,7 +338,7 @@ public final class CardEditorScreen extends Screen {
         list.add(rule);
         var old = current();
         replace(new FilterCategory(old.name(), old.iconItemId(), list, old.mode()));
-        rulePage = maxPage(list.size(), RULE_ROWS);
+        ruleOffset = Math.max(0, list.size() - RULE_ROWS);
         message((inverse ? "排除：" : "包含：") + option.title().getString(), false);
         rebuildWidgets();
     }
@@ -269,27 +351,18 @@ public final class CardEditorScreen extends Screen {
         replace(new FilterCategory(old.name(), old.iconItemId(), list, old.mode()));
         rebuildWidgets();
     }
-    private void pageAttributes(int delta) {
-        attributePage = Math.max(0, Math.min(maxPage(attributes.size(), ATTRIBUTE_ROWS),
-            attributePage + delta));
-        rebuildWidgets();
-    }
-    private void pageRules(int delta) {
-        if (!hasCategory()) return;
-        rulePage = Math.max(0, Math.min(maxPage(current().rules().size(), RULE_ROWS),
-            rulePage + delta));
-        rebuildWidgets();
-    }
     private static ResourceLocation itemId(ItemStack stack) {
         return BuiltInRegistries.ITEM.getKey(stack.getItem());
     }
 
     private void setSample(ItemStack next) {
-        if (!commitName()) return;
+        if (ItemStack.matches(sample, next)) return;
+        String pendingName = name == null ? null : name.getValue();
         sample = next.isEmpty() ? ItemStack.EMPTY : next.copyWithCount(1);
-        attributePage = 0;
+        attributeIndex = 0;
         refreshOptions();
         rebuildWidgets();
+        if (pendingName != null && hasCategory()) name.setValue(pendingName);
         message(sample.isEmpty() ? "参考槽已清空"
             : "已放入参考物品：" + sample.getHoverName().getString(), false);
     }
@@ -367,123 +440,174 @@ public final class CardEditorScreen extends Screen {
     private void saveCard() {
         if (!commitName()) return;
         try {
-            PacketDistributor.sendToServer(new SaveCardPayload(CardWireCodec.encode(working)));
-            onClose();
+            PacketDistributor.sendToServer(new SaveCardPayload(menu.containerId, CardWireCodec.encode(working)));
         } catch (RuntimeException ex) {
             message("保存失败：" + ex.getMessage(), true);
         }
     }
 
-    private int backpackIndex(double mouseX, double mouseY) {
-        int dx = (int)Math.floor(mouseX - left() - 11);
-        int dy = (int)Math.floor(mouseY - top() - 137);
-        if (dx < 0 || dy < 0 || dx >= 162 || dy >= 72) return -1;
-        return (dy / 18) * 9 + (dx / 18);
-    }
-    private boolean onSampleSlot(double mouseX, double mouseY) {
-        return mouseX >= left()+18 && mouseX < left()+42 &&
-               mouseY >= top()+76 && mouseY < top()+100;
+    private void clearReference() {
+        if (minecraft == null || minecraft.gameMode == null || minecraft.player == null) return;
+        minecraft.gameMode.handleInventoryMouseClick(menu.containerId,
+            CardEditorMenu.REFERENCE_SLOT, 0, ClickType.PICKUP, minecraft.player);
+        setSample(menu.referenceItem());
     }
 
-    @Override public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (super.mouseClicked(mouseX, mouseY, button)) return true;
-        if (onSampleSlot(mouseX, mouseY)) {
-            var player = Minecraft.getInstance().player;
-            ItemStack carried = player == null ? ItemStack.EMPTY
-                : player.containerMenu.getCarried();
-            if (!carried.isEmpty()) setSample(carried);
-            else if (!dragged.isEmpty()) setSample(dragged);
-            else if (!sample.isEmpty()) setSample(ItemStack.EMPTY);
-            return true;
+    @Override protected void containerTick() {
+        super.containerTick();
+        setSample(menu.referenceItem());
+        if (noticeTicks > 0) noticeTicks--;
+    }
+
+    @Override protected void slotClicked(Slot slot, int slotId, int button, ClickType type) {
+        super.slotClicked(slot, slotId, button, type);
+        if (slot != null && menu.isPlayerSlot(slotId) && button == 0 && type == ClickType.PICKUP) {
+            // Cosmetic drag only: the real menu cursor never receives this copy.
+            dragged = slot.getItem().copyWithCount(1);
         }
-        int index = backpackIndex(mouseX, mouseY);
-        if (index < 0 || button != 0) return false;
-        var player = Minecraft.getInstance().player;
-        if (player == null || player.getInventory().items.size() <= index) return false;
-        ItemStack item = player.getInventory().items.get(index);
-        if (item.isEmpty()) return true;
-        dragged = item.copyWithCount(1);
-        // One click picks a ghost sample; drag-and-release into the above slot
-        // works as well. Never remove anything from the actual inventory.
-        setSample(dragged);
-        return true;
+        setSample(menu.referenceItem());
     }
 
     @Override public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        boolean result = super.mouseReleased(mouseX, mouseY, button);
-        if (button == 0 && !dragged.isEmpty()) {
-            if (onSampleSlot(mouseX, mouseY)) setSample(dragged);
-            dragged = ItemStack.EMPTY;
+        if (ruleMouseDown) {
+            ruleMouseDown = false;
+            for (var widget : ruleWidgets) widget.mouseReleased(mouseX, mouseY, button);
             return true;
         }
+        boolean result = super.mouseReleased(mouseX, mouseY, button);
+        dragged = ItemStack.EMPTY;
         return result;
     }
 
-    @Override public boolean mouseScrolled(double mouseX, double mouseY,
-                                           double deltaX, double deltaY) {
-        if (mouseX >= left()+190 && mouseX <= left()+378
-            && mouseY >= top()+94 && mouseY <= top()+187) {
-            pageAttributes(deltaY > 0 ? -1 : 1);
+    @Override public boolean mouseClicked(double mx, double my, int button) {
+        if (button == 1 && selector != null && selector.mouseClicked(mx, my, button)) {
+            ruleMouseDown = true;
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, deltaX, deltaY);
+        if (new Rect(left() + RULE_PANEL.x(), top() + RULE_PANEL.y(), RULE_PANEL.width(), RULE_PANEL.height()).contains(mx, my)) {
+            ruleMouseDown = true;
+            for (var widget : ruleWidgets) if (widget.mouseClicked(mx, my, button)) return true;
+            return true;
+        }
+        return super.mouseClicked(mx, my, button);
+    }
+
+    @Override public boolean mouseDragged(double mx, double my, int button, double dx, double dy) {
+        return ruleMouseDown || super.mouseDragged(mx, my, button, dx, dy);
+    }
+
+    @Override public boolean mouseScrolled(double mx, double my, double dx, double dy) {
+        if (ruleArea != null && ruleArea.contains(mx, my) && dy != 0) {
+            int max = hasCategory() ? Math.max(0, current().rules().size() - RULE_ROWS) : 0;
+            int next = Math.max(0, Math.min(max, ruleOffset + (dy < 0 ? 1 : -1)));
+            if (next != ruleOffset) {
+                ruleOffset = next;
+                rebuildRulePanel();
+            }
+            return true;
+        }
+        return selector != null && selector.mouseScrolled(mx, my, dx, dy);
+    }
+
+    @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (name != null && name.isFocused() && keyCode != 256)
+            return name.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override public void renderBackground(GuiGraphics g, int mx, int my, float tick) {
+        g.fill(0, 0, width, height, 0xA8000000);
+        renderBg(g, tick, mx, my);
+    }
+
+    @Override protected void renderBg(GuiGraphics g, float tick, int mx, int my) {
+        int x = left(), y = top();
+        RsUi.panel(g, x, y, W, CONFIG_HEIGHT);
+        // RS gray surface throughout; hierarchy comes from native frames.
+        g.fill(x + 4, y + 4, x + W - 4, y + 16, 0xFFD5D5D0);
+        String title = "过滤升级";
+        g.drawString(font, title, x + (W - font.width(title)) / 2, y + 4, 0xFF404040, false);
+        g.fill(x + NAME.x(), y + NAME.y(), x + NAME.x() + NAME.width(), y + NAME.y() + NAME.height(), 0xFFF0F0EA);
+        g.fill(x + NAME.x(), y + NAME.y(), x + NAME.x() + NAME.width(), y + NAME.y() + 1, 0xFF777B7B);
+        if (hasCategory()) {
+            String position = (category + 1) + "/" + working.categories().size();
+            g.drawString(font, position, x + W - 8 - font.width(position), y + 4, 0xFF606060, false);
+        }
+        if (hasCategory()) {
+            ResourceLocation icon = ResourceLocation.tryParse(current().iconItemId());
+            ItemStack stack = icon != null && BuiltInRegistries.ITEM.containsKey(icon)
+                ? new ItemStack(BuiltInRegistries.ITEM.get(icon)) : new ItemStack(Items.PAPER);
+            g.pose().pushPose();
+            g.pose().translate(x + 5, y + 2, 0);
+            g.pose().scale(.625f, .625f, .625f);
+            g.renderItem(stack, 0, 0);
+            g.pose().popPose();
+        }
+        slotFrame(g, x + REFERENCE_X, y + REFERENCE_Y);
+        if (noticeTicks > 0)
+            g.drawString(font, EditorText.fit(notice, W - 52, font::width), x + 42, y + 75,
+                isError ? 0xFF9A2222 : 0xFF504B42, false);
+
+        RsUi.panel(g, x + INVENTORY.x(), y + INVENTORY.y(), INVENTORY.width(), INVENTORY.height());
+        g.drawString(font, "物品栏", x + INVENTORY.x() + 8, y + INVENTORY.y() + 6, 0xFF484848, false);
+        for (int i = 0; i < CardEditorMenu.PLAYER_SLOT_COUNT; i++) {
+            Slot slot = menu.getSlot(i);
+            slotFrame(g, x + slot.x, y + slot.y);
+        }
+        RsUi.panel(g, x + RULE_PANEL.x(), y + RULE_PANEL.y(), RULE_PANEL.width(), RULE_PANEL.height());
+        int count = hasCategory() ? current().rules().size() : 0;
+        g.drawString(font, "已选规则 " + count, x + RULE_PANEL.x() + 5, y + RULE_PANEL.y() + 6, 0xFF504B42, false);
+        if (count == 0) g.drawString(font, "尚无规则", x + RULE_LIST.x() + 5, y + RULE_LIST.y() + 4, 0xFF787369, false);
+        else g.drawString(font, (ruleOffset + 1) + "–" + Math.min(count, ruleOffset + RULE_ROWS) + "/" + count,
+            x + RULE_PANEL.x() + 5, y + RULE_PANEL.y() + 96, 0xFF777166, false);
+    }
+
+    private static void slotFrame(GuiGraphics g, int x, int y) {
+        RsUi.slot(g, x, y);
+    }
+
+    @Override protected void renderLabels(GuiGraphics g, int mx, int my) {}
+
+    private java.util.List<net.minecraft.util.FormattedCharSequence> wrapTooltip(List<Component> lines) {
+        int pixels = Math.max(80, Math.min(340, width - 24));
+        return lines.stream().flatMap(line -> font.split(line, pixels).stream()).toList();
+    }
+
+    @Override protected void renderTooltip(GuiGraphics g, int mx, int my) {
+        List<Component> candidates = candidateTooltipAt(mx, my, 16);
+        if (!candidates.isEmpty()) {
+            var wrapped = wrapTooltip(candidates);
+            for (int entries = 15; wrapped.size() * 9 > height - 20 && entries >= 3; entries--)
+                wrapped = wrapTooltip(candidateTooltipAt(mx, my, entries));
+            g.renderTooltip(font, wrapped, mx, my);
+            return;
+        }
+        for (int i = 0; i < ruleWidgets.size(); i++) {
+            var widget = ruleWidgets.get(i);
+            if (!widget.isMouseOver(mx, my)) continue;
+            if ((i & 1) == 1) g.renderComponentTooltip(font, List.of(Component.literal("删除这条规则")), mx, my);
+            else if (hasCategory()) {
+                var rule = current().rules().get(ruleOffset + i / 2);
+                var lines = RuleClipboard.tooltip(rule.kind(), ruleDescription(rule), rule.value(), rule.exclude())
+                    .stream().map(Component::literal).map(Component.class::cast).toList();
+                g.renderTooltip(font, wrapTooltip(lines), mx, my);
+            }
+            return;
+        }
+        if (new Rect(left() + REFERENCE_X - 1, top() + REFERENCE_Y - 1, 18, 18).contains(mx, my)) {
+            List<Component> lines = new ArrayList<>();
+            if (!sample.isEmpty()) lines.add(sample.getHoverName());
+            lines.add(Component.literal("从背包点选样本；点击此槽清空"));
+            lines.add(Component.literal("样本不消耗物品，也不永久保存"));
+            g.renderComponentTooltip(font, lines, mx, my);
+        } else super.renderTooltip(g, mx, my);
     }
 
     @Override public void render(GuiGraphics g, int mx, int my, float tick) {
-        // Do not call renderBackground(): vanilla blurs the game and can cause
-        // the old GUI beneath this editor to appear as blurry ghost text.
-        g.fill(0, 0, width, height, 0xA8000000);
-        int x = left(), y = top();
-        g.fill(x-4, y-4, x+W+4, y+H+4, 0xFF151A20);
-        g.fill(x+4, y+53, x+184, y+263, 0xFF252B31);
-        g.fill(x+186, y+53, x+383, y+263, 0xFF252B31);
-        g.drawCenteredString(font, "精致存储 · 过滤升级", width/2, y+8, 0xFFF4F4F4);
-        g.drawString(font, "分类名", x+10, y+33, 0xFFDDDDDD);
-        g.drawString(font, hasCategory()
-            ? (category+1)+"/"+working.categories().size() : "尚无分类",
-            x+12, y+55, 0xFFADBBC7);
-        g.drawString(font, "参考槽", x+48, y+81, 0xFFE1E4E6);
-        g.fill(x+17,y+75,x+43,y+101,0xFF6B7680);
-        g.fill(x+20,y+78,x+40,y+98,0xFF101417);
-        if (!sample.isEmpty()) g.renderItem(sample, x+22, y+80);
-        if (hasCategory()) {
-            ResourceLocation iconId = ResourceLocation.tryParse(current().iconItemId());
-            ItemStack iconStack = iconId != null && BuiltInRegistries.ITEM.containsKey(iconId)
-                ? new ItemStack(BuiltInRegistries.ITEM.get(iconId)) : new ItemStack(Items.PAPER);
-            g.renderItem(iconStack,x+80,y+77);
-        }
-        g.drawString(font, sample.isEmpty() ? "从背包点选/拖入参考槽"
-            : shorten(sample.getHoverName().getString(), 24),
-            x+11, y+109, 0xFFDEE4E9);
-        g.drawString(font, "玩家背包（仅作参考，不消耗物品）",
-            x+11, y+124, 0xFFADBBC7);
-        var player = Minecraft.getInstance().player;
-        if (player != null) {
-            int count = Math.min(36, player.getInventory().items.size());
-            for (int i=0;i<count;i++) {
-                ItemStack item = player.getInventory().items.get(i);
-                int ix=x+11+(i%9)*18, iy=y+137+(i/9)*18;
-                g.fill(ix,iy,ix+17,iy+17,0xFF414A52);
-                if (!item.isEmpty()) g.renderItem(item,ix,iy);
-            }
-        }
-        g.drawString(font, "过滤模式", x+191, y+46, 0xFFBFC9D1);
-        g.drawString(font, "参考物品的属性", x+191, y+81, 0xFFE5E5E5);
-        g.drawString(font, "已选条件 " + (hasCategory()?current().rules().size():0),
-            x+191, y+193, 0xFFE5E5E5);
         super.render(g, mx, my, tick);
-        if (!dragged.isEmpty()) g.renderItem(dragged, mx-8, my-8);
-        g.drawString(font, shorten(notice, 57), x+8, y+263,
-            isError?0xFFFF7777:0xFF80D7AA);
-        if (player != null) {
-            int hover=backpackIndex(mx,my);
-            if (hover>=0 && hover<player.getInventory().items.size()) {
-                var item=player.getInventory().items.get(hover);
-                if (!item.isEmpty()) g.renderTooltip(font,item,mx,my);
-            }
-        }
-        if (onSampleSlot(mx,my) && !sample.isEmpty())
-            g.renderTooltip(font,sample,mx,my);
+        for (var widget : ruleWidgets) widget.render(g, mx, my, tick);
+        if (!dragged.isEmpty()) g.renderItem(dragged, mx - 8, my - 8);
+        renderTooltip(g, mx, my);
     }
 
     @Override public boolean isPauseScreen() { return false; }

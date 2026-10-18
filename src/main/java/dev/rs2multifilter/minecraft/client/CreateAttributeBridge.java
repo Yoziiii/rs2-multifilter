@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Optional Create 6.0+ attribute integration, using Create's OWN discovery,
@@ -23,14 +22,16 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class CreateAttributeBridge {
     private static final String ATTRIBUTE_CLASS =
         "com.simibubi.create.content.logistics.item.filter.attribute.ItemAttribute";
-    private static final Map<String, Object> CACHE = new ConcurrentHashMap<>();
+    static final int CACHE_CAPACITY = 1024;
+    private static final Map<String, Object> CACHE = AttributeCaches.bounded(CACHE_CAPACITY);
     private static final HexFormat HEX = HexFormat.of();
     private CreateAttributeBridge() {}
+    static void clearCache() { CACHE.clear(); }
 
     public record Attribute(String label, String value) {}
 
     public static List<Attribute> getSampleAttributes(ItemStack sample) {
-        Level level = Minecraft.getInstance().level;
+        Level level = AttributeCaches.level();
         if (level == null || sample.isEmpty()) return List.of();
         List<Attribute> result = new ArrayList<>();
         try {
@@ -47,7 +48,7 @@ public final class CreateAttributeBridge {
                     String encoded = "create:" + HEX.formatHex(nbt.toString().getBytes(StandardCharsets.UTF_8));
                     if (encoded.length() > 4096 || encoded.length() < 9) continue;
                     String title = ((Component) format.invoke(attr, false)).getString();
-                    if (title.isBlank()) title = attr.getClass().getSimpleName();
+                    if (title.isBlank()) title = "Create 附属属性";
                     result.add(new Attribute(title, encoded));
                     CACHE.put(encoded, attr);
                 } catch (ReflectiveOperationException ignored) {
@@ -63,10 +64,11 @@ public final class CreateAttributeBridge {
     /** Human-readable translation of a persisted Create item attribute. */
     public static String describe(String encoded) {
         try {
+            Level level = AttributeCaches.level();
+            if (level == null) return "Create 属性";
             Object attribute = CACHE.get(encoded);
             if (attribute == null) {
-                Level level = Minecraft.getInstance().level;
-                if (level == null || !encoded.startsWith("create:")) return "Create 属性";
+                if (!encoded.startsWith("create:")) return "Create 属性";
                 Class<?> type = Class.forName(ATTRIBUTE_CLASS);
                 Method load = type.getMethod("loadStatic", CompoundTag.class,
                     net.minecraft.core.HolderLookup.Provider.class);
@@ -86,28 +88,49 @@ public final class CreateAttributeBridge {
     }
 
     public static boolean matches(String encoded, ItemStack stack) {
-        Level level = Minecraft.getInstance().level;
-        if (level == null || stack.isEmpty() || !encoded.startsWith("create:")) return false;
+        return evaluate(encoded, stack).matched();
+    }
+
+    /** Reload persisted data at a card check/retry, so a stale discovered object cannot hide a missing type. */
+    public static AttributeResult availability(String encoded) {
+        CACHE.remove(encoded);
         try {
-            Object attr = CACHE.get(encoded);
-            if (attr == null) {
-                Class<?> type = Class.forName(ATTRIBUTE_CLASS);
-                Method load = type.getMethod("loadStatic", CompoundTag.class,
-                    net.minecraft.core.HolderLookup.Provider.class);
-                String rawNbt = new String(HEX.parseHex(encoded.substring(7)), StandardCharsets.UTF_8);
-                if (rawNbt.length() > 2048) return false;
-                CompoundTag compound = TagParser.parseTag(rawNbt);
-                attr = load.invoke(null, compound, level.registryAccess());
-                if (attr == null) return false;
-                if (CACHE.size() > 1024) CACHE.clear();
-                CACHE.put(encoded, attr);
-            }
-            return Boolean.TRUE.equals(
-                attr.getClass().getMethod("appliesTo", ItemStack.class, Level.class)
-                    .invoke(attr, stack, level)
-            );
+            load(encoded, AttributeCaches.level());
+            return AttributeResult.match(true);
         } catch (Exception | LinkageError e) {
-            return false;
+            CACHE.remove(encoded);
+            return AttributeResult.unavailable("Create 属性无法加载（模组或注册可能缺失）：" + AttributeResult.failure(e));
+        }
+    }
+
+    private static Object load(String encoded, Level level) throws Exception {
+        if (level == null) throw new IllegalStateException("当前世界不可用");
+        if (!encoded.startsWith("create:")) throw new IllegalArgumentException("属性编码无效");
+        Class<?> type = Class.forName(ATTRIBUTE_CLASS);
+        Method load = type.getMethod("loadStatic", CompoundTag.class, net.minecraft.core.HolderLookup.Provider.class);
+        String rawNbt = new String(HEX.parseHex(encoded.substring(7)), StandardCharsets.UTF_8);
+        if (rawNbt.length() > 2048) throw new IllegalArgumentException("属性数据过长");
+        Object attr = load.invoke(null, TagParser.parseTag(rawNbt), level.registryAccess());
+        if (attr == null) throw new IllegalStateException("属性注册不存在，或原属性数据无法解码");
+        CACHE.put(encoded, attr);
+        return attr;
+    }
+
+    public static AttributeResult evaluate(String encoded, ItemStack stack) {
+        try {
+            Level level = AttributeCaches.level();
+            if (level == null) throw new IllegalStateException("当前世界不可用");
+            Object attr = CACHE.get(encoded);
+            if (attr == null) attr = load(encoded, level);
+            if (stack.isEmpty()) return AttributeResult.match(false);
+            // Invoke the public interface, including attributes implemented by non-public add-on classes.
+            Object result = Class.forName(ATTRIBUTE_CLASS).getMethod("appliesTo", ItemStack.class, Level.class)
+                .invoke(attr, stack, level);
+            if (!(result instanceof Boolean matches)) throw new IllegalStateException("属性接口未返回布尔结果");
+            return AttributeResult.match(matches);
+        } catch (Exception | LinkageError e) {
+            CACHE.remove(encoded);
+            return AttributeResult.unavailable("Create 属性执行失败：" + AttributeResult.failure(e));
         }
     }
 }

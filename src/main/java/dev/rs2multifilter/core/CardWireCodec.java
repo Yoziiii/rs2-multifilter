@@ -9,6 +9,10 @@ public final class CardWireCodec {
     public static final int MAX_BYTES = 16_000;
     public static final int MAX_ENCODED_CHARS = 22_000;
 
+    public static final class UnsupportedDataException extends IllegalArgumentException {
+        public UnsupportedDataException(String message) { super(message); }
+    }
+
     public static String encode(FilterCard card) {
         Objects.requireNonNull(card);
         if (card.categories().size() > FilterCard.MAX_PER_CARD) throw new IllegalArgumentException("单张卡最多 64 个分类");
@@ -39,8 +43,10 @@ public final class CardWireCodec {
 
     public static FilterCard decode(String encoded) {
         if (encoded == null || encoded.isEmpty()) return FilterCard.blank();
-        if (encoded.length() > MAX_ENCODED_CHARS || !(encoded.startsWith("v1:") || encoded.startsWith("v2:"))) {
-            throw new IllegalArgumentException("未知格式或数据长度超限");
+        if (encoded.length() > MAX_ENCODED_CHARS) throw new IllegalArgumentException("数据长度超限");
+        if (!(encoded.startsWith("v1:") || encoded.startsWith("v2:"))) {
+            if (encoded.matches("v[0-9]+:.*")) throw new UnsupportedDataException("不支持的配置版本");
+            throw new IllegalArgumentException("配置格式无效");
         }
         try {
             boolean legacy = encoded.startsWith("v1:");
@@ -49,7 +55,7 @@ public final class CardWireCodec {
             try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes))) {
                 if (in.readInt() != MAGIC) throw new IllegalArgumentException("不是过滤卡数据");
                 int version = in.readUnsignedByte();
-                if (version != (legacy ? 1 : FilterCard.VERSION)) throw new IllegalArgumentException("不支持的卡片版本");
+                if (version != (legacy ? 1 : FilterCard.VERSION)) throw new UnsupportedDataException("不支持的卡片版本 " + version);
                 int count = in.readUnsignedShort();
                 if (count > FilterCard.MAX_PER_CARD) throw new IllegalArgumentException("分类数量超限");
                 List<FilterCategory> categories = new ArrayList<>(count);
@@ -57,13 +63,13 @@ public final class CardWireCodec {
                     String name = in.readUTF();
                     String icon = in.readUTF();
                     int modeOrdinal = legacy ? 0 : in.readUnsignedByte();
-                    if (modeOrdinal >= FilterCategory.Mode.values().length) throw new IllegalArgumentException("未知模式");
+                    if (modeOrdinal >= FilterCategory.Mode.values().length) throw new UnsupportedDataException("未知模式 " + modeOrdinal);
                     int rc = in.readUnsignedShort();
                     if (rc > 256) throw new IllegalArgumentException("规则数量无效");
                     List<FilterRule> rules = new ArrayList<>(rc);
                     for (int j = 0; j < rc; j++) {
                         int kind = in.readUnsignedByte();
-                        if (kind >= FilterRule.Kind.values().length) throw new IllegalArgumentException("未知规则类型");
+                        if (kind >= FilterRule.Kind.values().length) throw new UnsupportedDataException("未知规则类型 " + kind);
                         boolean exclude = in.readBoolean();
                         rules.add(new FilterRule(FilterRule.Kind.values()[kind], in.readUTF(), exclude));
                     }
@@ -72,6 +78,8 @@ public final class CardWireCodec {
                 if (in.read() != -1) throw new IllegalArgumentException("数据尾部包含多余内容");
                 return new FilterCard(FilterCard.VERSION, categories);
             }
+        } catch (UnsupportedDataException e) {
+            throw e;
         } catch (IOException | IllegalArgumentException e) {
             throw new IllegalArgumentException("过滤卡数据无效: " + e.getMessage(), e);
         }
