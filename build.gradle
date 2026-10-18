@@ -3,7 +3,7 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.147'
 }
 
-version = '0.9.0-alpha'
+version = '0.9.0'
 group = 'dev.rs2multifilter'
 base { archivesName = 'rs2multifilter' }
 
@@ -41,6 +41,7 @@ dependencies {
 }
 
 processResources {
+    inputs.property('modVersion', project.version)
     filesMatching('META-INF/neoforge.mods.toml') {
         expand version: project.version
     }
@@ -48,6 +49,13 @@ processResources {
 
 test {
     useJUnitPlatform()
+}
+
+tasks.named('jar', Jar) {
+    from('LICENSE') { into 'META-INF' }
+    from('THIRD_PARTY_NOTICES.md') { into 'META-INF' }
+    from('licenses') { into 'META-INF/licenses' }
+    from('docs/TEXTURE_PROVENANCE.md') { into 'META-INF/docs' }
 }
 
 // Explicit CI-only probe. Its classes are not part of the production JAR.

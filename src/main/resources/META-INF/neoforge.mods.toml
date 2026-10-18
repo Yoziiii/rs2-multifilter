@@ -5,7 +5,8 @@ license="MIT"
 [[mods]]
 modId="rs2multifilter"
 version="${version}"
-displayName="RS2 Multi Filter Card"
+displayName="复活吧 我的过滤升级"
+logoFile="logo.png"
 authors="Yoziiii"
 description='''One configurable card with many Refined Storage 2 categories, an installed grid card slot and graphical sample-based editing.'''
 
