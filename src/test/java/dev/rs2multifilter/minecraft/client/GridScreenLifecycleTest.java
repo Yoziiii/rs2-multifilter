@@ -230,4 +230,23 @@ class GridScreenLifecycleTest {
                 assertEquals(category / 2, ClientCardState.source(menu.containerId, category).slot());
         }
     }
+    @Test void changedPacketRefreshesCachedRulesAndTheRealTerminalRepository() throws Exception {
+        synchronize(2);
+        menu.getRepository().update(new ItemResource(Items.DIRT),64);
+        menu.getRepository().update(new ItemResource(Items.STONE),64);
+        var buttons=initialize();buttons.get(1).onPress();
+        assertTrue(menu.getRepository().getViewList().stream().allMatch(r->
+            ((com.refinedmods.refinedstorage.common.grid.view.ItemGridResource)r).getItemStack().is(Items.STONE)));
+        var replacement=FilterCard.blank().withCategory(new FilterCategory("Changed","minecraft:dirt",List.of(
+            new FilterRule(FilterRule.Kind.ITEM,"minecraft:dirt",false))));
+        ClientCardState.update(menu.containerId,0,CardWireCodec.encode(replacement));
+        var render=mock(ScreenEvent.Render.Post.class);when(render.getScreen()).thenReturn(screen);
+        GridTabs.onScreenRender(render); // Existing policy resets selection to All on a real card change.
+        assertEquals(replacement,session().card());assertEquals(-1,session().selected());
+        buttons.get(1).onPress();
+        assertEquals(1,menu.getRepository().getViewList().size());
+        assertTrue(((com.refinedmods.refinedstorage.common.grid.view.ItemGridResource)
+            menu.getRepository().getViewList().getFirst()).getItemStack().is(Items.DIRT));
+        assertEquals(replacement,ClientCardState.source(menu.containerId,0).card());
+    }
 }
