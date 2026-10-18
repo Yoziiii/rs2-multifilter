@@ -8,7 +8,6 @@ import net.minecraft.world.item.ItemStack;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Strict old-RS-style item comparison (item ID + damage + component/NBT data).
@@ -16,13 +15,16 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class ExactItemBridge {
     private static final HexFormat HEX = HexFormat.of();
-    private static final Map<String, ItemStack> CACHE = new ConcurrentHashMap<>();
+    static final int CACHE_CAPACITY = 512;
+    private static final Map<String, ItemStack> CACHE = AttributeCaches.bounded(CACHE_CAPACITY);
     private ExactItemBridge() {}
+    static void clearCache() { CACHE.clear(); }
 
     public static String encode(ItemStack input) {
-        if (input.isEmpty() || Minecraft.getInstance().level == null) return null;
+        var level = AttributeCaches.level();
+        if (input.isEmpty() || level == null) return null;
         try {
-            net.minecraft.nbt.Tag tag = input.copyWithCount(1).save(Minecraft.getInstance().level.registryAccess());
+            net.minecraft.nbt.Tag tag = input.copyWithCount(1).save(level.registryAccess());
             if (!(tag instanceof CompoundTag nbt)) return null;
             String value = "exact:" + HEX.formatHex(nbt.toString().getBytes(StandardCharsets.UTF_8));
             if (value.length() > 4096) return null;
@@ -36,16 +38,16 @@ public final class ExactItemBridge {
         catch (Exception | LinkageError e) { return ItemStack.EMPTY; }
     }
     private static ItemStack readChecked(String value) throws Exception {
+        var level = AttributeCaches.level();
         ItemStack cached = CACHE.get(value);
         if (cached != null && !cached.isEmpty()) return cached;
-        if (!value.startsWith("exact:") || Minecraft.getInstance().level == null)
+        if (!value.startsWith("exact:") || level == null)
             throw new IllegalStateException("精确物品编码或当前世界不可用");
         String snbt = new String(HEX.parseHex(value.substring(6)), StandardCharsets.UTF_8);
         if (snbt.length() > 2048) throw new IllegalArgumentException("精确物品数据过长");
-        ItemStack parsed = ItemStack.parseOptional(Minecraft.getInstance().level.registryAccess(),
+        ItemStack parsed = ItemStack.parseOptional(level.registryAccess(),
             TagParser.parseTag(snbt));
         if (parsed.isEmpty()) throw new IllegalStateException("引用物品或组件缺失，或精确物品数据无法解码");
-        if (CACHE.size() > 512) CACHE.clear();
         CACHE.put(value, parsed);
         return parsed;
     }

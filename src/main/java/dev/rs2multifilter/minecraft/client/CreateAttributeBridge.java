@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Optional Create 6.0+ attribute integration, using Create's OWN discovery,
@@ -23,14 +22,16 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class CreateAttributeBridge {
     private static final String ATTRIBUTE_CLASS =
         "com.simibubi.create.content.logistics.item.filter.attribute.ItemAttribute";
-    private static final Map<String, Object> CACHE = new ConcurrentHashMap<>();
+    static final int CACHE_CAPACITY = 1024;
+    private static final Map<String, Object> CACHE = AttributeCaches.bounded(CACHE_CAPACITY);
     private static final HexFormat HEX = HexFormat.of();
     private CreateAttributeBridge() {}
+    static void clearCache() { CACHE.clear(); }
 
     public record Attribute(String label, String value) {}
 
     public static List<Attribute> getSampleAttributes(ItemStack sample) {
-        Level level = Minecraft.getInstance().level;
+        Level level = AttributeCaches.level();
         if (level == null || sample.isEmpty()) return List.of();
         List<Attribute> result = new ArrayList<>();
         try {
@@ -63,10 +64,11 @@ public final class CreateAttributeBridge {
     /** Human-readable translation of a persisted Create item attribute. */
     public static String describe(String encoded) {
         try {
+            Level level = AttributeCaches.level();
+            if (level == null) return "Create 属性";
             Object attribute = CACHE.get(encoded);
             if (attribute == null) {
-                Level level = Minecraft.getInstance().level;
-                if (level == null || !encoded.startsWith("create:")) return "Create 属性";
+                if (!encoded.startsWith("create:")) return "Create 属性";
                 Class<?> type = Class.forName(ATTRIBUTE_CLASS);
                 Method load = type.getMethod("loadStatic", CompoundTag.class,
                     net.minecraft.core.HolderLookup.Provider.class);
@@ -93,7 +95,7 @@ public final class CreateAttributeBridge {
     public static AttributeResult availability(String encoded) {
         CACHE.remove(encoded);
         try {
-            load(encoded, Minecraft.getInstance().level);
+            load(encoded, AttributeCaches.level());
             return AttributeResult.match(true);
         } catch (Exception | LinkageError e) {
             CACHE.remove(encoded);
@@ -110,14 +112,13 @@ public final class CreateAttributeBridge {
         if (rawNbt.length() > 2048) throw new IllegalArgumentException("属性数据过长");
         Object attr = load.invoke(null, TagParser.parseTag(rawNbt), level.registryAccess());
         if (attr == null) throw new IllegalStateException("属性注册不存在，或原属性数据无法解码");
-        if (CACHE.size() > 1024) CACHE.clear();
         CACHE.put(encoded, attr);
         return attr;
     }
 
     public static AttributeResult evaluate(String encoded, ItemStack stack) {
         try {
-            Level level = Minecraft.getInstance().level;
+            Level level = AttributeCaches.level();
             if (level == null) throw new IllegalStateException("当前世界不可用");
             Object attr = CACHE.get(encoded);
             if (attr == null) attr = load(encoded, level);
